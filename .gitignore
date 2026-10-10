@@ -1,0 +1,19 @@
+.local/
+experiments/asr-probe/.build/
+DialogueWorkbench/.build/
+reports/asr-probe-2026-10-09/*.wav
+reports/asr-probe-2026-10-09/**/*.wav
+experiments/asr-probe/__pycache__/
+
+# Private media, transcripts, learning data and generated artifacts
+reports/
+docs/superpowers/
+experiments/
+*.app/
+*.sqlite*
+*.srt
+*.wav
+*.mp4
+*.mp3
+*.m4a
+.DS_Store
