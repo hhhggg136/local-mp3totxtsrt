@@ -34,9 +34,10 @@ struct Recognition {
         let wav = temporary.appendingPathComponent("audio.wav")
         try process(root.appendingPathComponent(".local/bin/inspect"), [source.path, wav.path], log: folder.appendingPathComponent("音频处理.log"))
         let prefix = folder.appendingPathComponent("识别原始结果")
-        var arguments = ["-m", root.appendingPathComponent(".local/models/ggml-small.bin").path, "-f", wav.path, "-l", "zh", "-t", "4", "-oj", "-of", prefix.path, "--vad", "--vad-model", root.appendingPathComponent(".local/models/ggml-silero-v6.2.0.bin").path]
-        if !prompt.isEmpty { arguments += ["--prompt", prompt] }
-        try process(root.appendingPathComponent(".local/whisper-engine/build/bin/whisper-cli"), arguments, log: folder.appendingPathComponent("识别.log"))
+        let arguments = [root.appendingPathComponent(".local/models/ggml-small.bin").path,
+                         root.appendingPathComponent(".local/models/ggml-silero-v6.2.0.bin").path,
+                         wav.path, prefix.appendingPathExtension("json").path, prompt]
+        try process(root.appendingPathComponent(".local/bin/source-timed-whisper"), arguments, log: folder.appendingPathComponent("识别.log"))
         let bytes = try Data(contentsOf: prefix.appendingPathExtension("json"))
         let decoded = String(decoding: bytes, as: UTF8.self)
         let object = try JSONSerialization.jsonObject(with: Data(decoded.utf8)) as? [String: Any]
@@ -56,9 +57,9 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("字幕.srt"), atomically: true, encoding: .utf8)
         try txt.write(to: folder.appendingPathComponent("对白.txt"), atomically: true, encoding: .utf8)
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
-        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.2.0"]
+        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.2.1", "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
-        let note = "本地中文识别结果，文字与时间码需人工核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
+        let note = "本地中文识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
         return folder
     }

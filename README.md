@@ -2,7 +2,7 @@
 
 一个 macOS 原生小工具：音视频转中文对白，导出带时间码的 TXT 和 SRT；把校对后的 SRT 导回来，积累按项目隔离的本地纠错词库。
 
-当前版本 **0.2.0**。已实现字幕生成和校对词库；音频剪辑、点击对白定位播放、波形和对白重排尚未实现。
+当前版本 **0.2.1**。已实现字幕生成和校对词库；音频剪辑、点击对白定位播放、波形和对白重排尚未实现。
 
 ## 使用
 
@@ -12,6 +12,8 @@
 4. 保留 `学习基准.srt`，另存并校对 `字幕.srt`。
 5. 打开「校对学习 / 词库」，选择学习基准及校对版，点击「学习本次修改」。以前生成的 SRT 也可以手动作为基准选择。
 6. 逐条核对候选纠错，点击「确认使用」。下次识别将把该项目已确认的正确词作为 whisper.cpp 的初始提示；不做自动文本替换。
+
+字幕时间码按**原素材的人声区间**生成：保留句间停顿，不把去掉停顿后拼接的识别音频时间码直接用于 SRT。一次只识别一个人声区间，导出边界不会包含识别时使用的额外声音上下文。详见 [时间码修复验证](docs/subtitle-timing-fix.md)。
 
 候选词可以修改、停用、删除。修改正确词后需要重新确认。在主窗口关闭「使用已确认词库」可临时停用全部提示。
 
@@ -29,7 +31,7 @@
 
 在 Apple silicon Mac 上验证；源码使用 Swift、SwiftUI、AppKit、AVFoundation、系统 SQLite 和 CryptoKit，无 Python 运行时依赖。建议 macOS 14 或更新版本；实际验证环境为 macOS 26 和 Swift 6.3.3，其他版本尚未验证。
 
-需要 Xcode Command Line Tools、Git、CMake 和 curl。程序及模型尚未制作成包含全部依赖的独立安装包。
+需要 Xcode Command Line Tools（Swift 和 C++ 编译器）、Git、CMake 和 curl。程序及模型尚未制作成包含全部依赖的独立安装包。
 
 ```bash
 # 只显示下载来源、体积和位置，不下载
@@ -58,6 +60,11 @@ Git 仓库不包含个人素材、字幕、输出报告、学习数据库、模�
 ```bash
 bash scripts/test.sh
 bash scripts/check-memory.sh
+# 可选：真实引擎停顿回归，需要 Python 3 和你授权测试的 16kHz 单声道 PCM16 WAV
+# --clips 分别指定两段有对白的起止秒数；测试在中间插入 4 秒数字静音
+python3 launcher/tests/timing_integration.py --app "$PWD/本地字幕工具.app" \
+  --audio /path/to/speech.wav --clips 1:3 5:8
+# 用 --lead-in 56 额外测试跨 60 秒处理窗口的停顿
 ```
 
 详见 [内存验证](docs/learning-memory.md)。内存报告只覆盖本地纠错学习过程，不代表语音识别模型、所有系统缓存或整个图形界面的占用。
