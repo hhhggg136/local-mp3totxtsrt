@@ -57,7 +57,7 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("字幕.srt"), atomically: true, encoding: .utf8)
         try txt.write(to: folder.appendingPathComponent("对白.txt"), atomically: true, encoding: .utf8)
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
-        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.2.1", "alignment": "source-vad-islands-v1"]
+        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.2.2", "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
         let note = "本地中文识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
@@ -103,28 +103,97 @@ final class Model: ObservableObject {
 }
 struct WorkspaceView: View {
     @ObservedObject var model: Model
+
+    private func sectionTitle(_ number: String, _ title: String) -> some View {
+        HStack(spacing: 10) {
+            Text(number).font(.caption.monospacedDigit()).foregroundColor(.secondary)
+            Text(title).font(.headline)
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Label("本地字幕工具", systemImage: "waveform").font(.largeTitle.bold())
-            Text("音视频转对白 · TXT / SRT").foregroundColor(.secondary)
-            HStack { Button("选择音视频…", action: model.chooseFile); Text(model.source?.lastPathComponent ?? "尚未选择素材").lineLimit(2) }.disabled(model.busy)
-            HStack { Button("保存到…", action: model.chooseFolder); Text(model.destination.path).font(.caption).foregroundColor(.secondary).lineLimit(2) }.disabled(model.busy)
-            HStack {
-                Text("项目")
-                TextField("项目名称", text: $model.project).textFieldStyle(.roundedBorder)
-                Toggle("使用已确认词库", isOn: $model.useLearning)
-                Button("校对学习 / 词库…") { model.showLearning = true }
-            }.disabled(model.busy)
-            Divider()
-            HStack {
-                Button("开始识别", action: model.start).keyboardShortcut(.defaultAction).disabled(model.source == nil || model.busy)
-                if model.busy { ProgressView().controlSize(.small) }
-                if let result = model.result { Button("打开字幕文件夹") { NSWorkspace.shared.open(result) } }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("本地字幕工具", systemImage: "waveform").font(.title.bold())
+                    Text("音视频转中文对白 · TXT / SRT").foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionTitle("01", "素材")
+                    HStack(alignment: .center, spacing: 16) {
+                        Button("选择音视频…", action: model.chooseFile)
+                        Text(model.source?.lastPathComponent ?? "尚未选择素材")
+                            .lineLimit(2).truncationMode(.middle)
+                            .foregroundColor(model.source == nil ? .secondary : .primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }.disabled(model.busy)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionTitle("02", "项目与词库")
+                    HStack(spacing: 16) {
+                        TextField("项目名称", text: $model.project)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 260)
+                            .accessibilityLabel("项目名称")
+                        Toggle("使用已确认词库", isOn: $model.useLearning)
+                        Spacer(minLength: 0)
+                        Button("管理词库…") { model.showLearning = true }
+                    }
+                    Text("仅使用同名项目中已确认的词语；可随时关闭提示。")
+                        .font(.caption).foregroundColor(.secondary)
+                }.disabled(model.busy)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionTitle("03", "保存位置")
+                    HStack(alignment: .center, spacing: 16) {
+                        Text(model.destination.path)
+                            .font(.callout).foregroundColor(.secondary)
+                            .lineLimit(2).truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("更改…", action: model.chooseFolder)
+                    }
+                }.disabled(model.busy)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 14) {
+                        Button("开始识别", action: model.start)
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(model.source == nil || model.busy)
+                        if model.busy {
+                            ProgressView().controlSize(.small)
+                            Text("正在本地识别…").foregroundColor(.secondary)
+                        }
+                        if let result = model.result {
+                            Button("打开字幕文件夹") { NSWorkspace.shared.open(result) }
+                        }
+                    }
+                    Text(model.source == nil && !model.busy ? "先选择一个音频或视频文件，随后即可开始识别。" : model.status)
+                        .font(.callout).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+                        .padding(14)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(8)
+                }
+
+                Text("使用本机 small 模型和人声检测，素材不会上传。\n完成后请核对文字、断句和时间码。音频剪辑和对白重排尚未开放。")
+                    .font(.caption).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(model.status).textSelection(.enabled).frame(minHeight: 44, alignment: .topLeading)
-            Spacer()
-            Text("使用本机 small 模型和人声检测，素材不会上传。\n当前提供字幕生成；音频剪辑和对白重排尚未开放。").font(.caption).foregroundColor(.secondary)
-        }.padding(28).frame(width: 680, height: 390)
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minWidth: 680, minHeight: 610)
+        .tint(.blue)
         .sheet(isPresented: $model.showLearning) { LearningPanel(model: model) }
     }
 }
@@ -132,8 +201,9 @@ final class Delegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
     let model = Model()
     func applicationDidFinishLaunching(_ notification: Notification) {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 736, height: 446), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 690), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "本地字幕工具"; window.delegate = self
+        window.contentMinSize = NSSize(width: 680, height: 610)
         window.contentView = NSHostingView(rootView: WorkspaceView(model: model))
         window.center(); window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

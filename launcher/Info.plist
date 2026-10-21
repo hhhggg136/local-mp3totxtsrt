@@ -6,7 +6,7 @@
 <key>CFBundleName</key><string>本地字幕工具</string>
 <key>CFBundleDisplayName</key><string>本地字幕工具</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.2.1</string>
+<key>CFBundleShortVersionString</key><string>0.2.2</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
