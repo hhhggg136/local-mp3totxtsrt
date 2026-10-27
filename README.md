@@ -65,7 +65,7 @@ Release 应用优先使用自身内部运行时，可独立移动和安装。下
 
 ## 构建与首次配置
 
-在 Apple silicon Mac 上验证；源码使用 Swift、SwiftUI、AppKit、AVFoundation、系统 SQLite 和 CryptoKit，无 Python 运行时依赖。建议 macOS 14 或更新版本；实际验证环境为 macOS 26 和 Swift 6.3.3，其他版本尚未验证。
+在 Apple silicon Mac 上验证；源码使用 Swift、SwiftUI、AppKit、AVFoundation、系统 SQLite 和 CryptoKit，无 Python 运行时依赖。当前构建和安装包以 macOS 26 为目标；实际验证环境为 macOS 26 和 Swift 6.3.3，其他版本尚未验证。
 
 源码构建需要 Xcode Command Line Tools（Swift 和 C++ 编译器）、Git、CMake 和 curl。直接使用上方 Release 安装包无需这些开发工具。
 
