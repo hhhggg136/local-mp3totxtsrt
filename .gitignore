@@ -17,3 +17,7 @@ experiments/
 *.mp3
 *.m4a
 .DS_Store
+
+# Generated Python bytecode
+__pycache__/
+*.pyc

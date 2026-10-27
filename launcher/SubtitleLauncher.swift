@@ -3,6 +3,10 @@ import SwiftUI
 
 let root: URL = {
     if let configured = ProcessInfo.processInfo.environment["LOCAL_SUBTITLE_ROOT"] { return URL(fileURLWithPath: configured) }
+    if let bundled = Bundle.main.resourceURL?.appendingPathComponent("Runtime"),
+       FileManager.default.fileExists(atPath: bundled.appendingPathComponent("runtime.json").path) {
+        return bundled
+    }
     return Bundle.main.bundleURL.deletingLastPathComponent()
 }()
 
@@ -60,7 +64,7 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("字幕.srt"), atomically: true, encoding: .utf8)
         try txt.write(to: folder.appendingPathComponent("对白.txt"), atomically: true, encoding: .utf8)
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
-        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.4.0", "language": language, "alignment": "source-vad-islands-v1"]
+        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.4.1", "language": language, "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
         let note = "本地原语言识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
