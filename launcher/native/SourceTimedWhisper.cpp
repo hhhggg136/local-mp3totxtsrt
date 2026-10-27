@@ -54,7 +54,9 @@ static std::string jsonString(const std::string& text) {
 }
 int main(int argc,char** argv) {
  try {
-  if(argc<5||argc>6)throw std::runtime_error("usage: source-timed-whisper model vad-model input.wav output.json [prompt]");
+  if(argc<5||argc>7)throw std::runtime_error("usage: source-timed-whisper model vad-model input.wav output.json [prompt] [zh|en|es|auto]");
+  const std::string language=argc==7?argv[6]:"zh";
+  if(language!="zh"&&language!="en"&&language!="es"&&language!="auto")throw std::runtime_error("unsupported language");
   Wave audio(argv[3]);
   auto vadParams=whisper_vad_default_context_params();vadParams.n_threads=4;vadParams.use_gpu=false;
   std::unique_ptr<whisper_vad_context,decltype(&whisper_vad_free)> vad(whisper_vad_init_from_file_with_params(argv[2],vadParams),whisper_vad_free);
@@ -98,10 +100,10 @@ int main(int argc,char** argv) {
    auto end=std::min(index+1<ranges.size()?ranges[index+1].start:audio.frames,range.end+200*rate/1000);
    auto samples=audio.read(begin,end);
    auto params=whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
-   params.n_threads=4;params.language="zh";params.no_context=true;params.single_segment=true;
+   params.n_threads=4;params.language=language.c_str();params.no_context=true;params.single_segment=true;
    params.print_progress=false;params.print_realtime=false;params.print_timestamps=false;
-   params.no_timestamps=true;params.suppress_nst=true;params.vad=false;
-   params.initial_prompt=argc==6&&argv[5][0]?argv[5]:nullptr;
+   params.translate=false;params.no_timestamps=true;params.suppress_nst=true;params.vad=false;
+   params.initial_prompt=argc>=6&&argv[5][0]?argv[5]:nullptr;
    if(whisper_full(recognizer.get(),params,samples.data(),int(samples.size()))!=0)throw std::runtime_error("speech recognition failed");
    std::string text;
    for(int i=0;i<whisper_full_n_segments(recognizer.get());++i)text+=whisper_full_get_segment_text(recognizer.get(),i);

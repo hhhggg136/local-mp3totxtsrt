@@ -22,7 +22,10 @@ struct Recognition {
             throw NSError(domain: "Subtitle", code: Int(task.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "处理失败，请查看输出文件夹内的日志。"])
         }
     }
-    static func run(source: URL, destination: URL, project: String = "默认项目", useLearning: Bool = true) throws -> URL {
+    static func run(source: URL, destination: URL, project: String = "默认项目", useLearning: Bool = true, language: String = "zh") throws -> URL {
+        guard ["zh", "en", "es", "auto"].contains(language) else {
+            throw NSError(domain: "Subtitle", code: 3, userInfo: [NSLocalizedDescriptionKey: "不支持的识别语言。"])
+        }
         let fm = FileManager.default
         let store = try LearningStore(url: LearningStore.defaultURL)
         let prompt = useLearning ? try store.prompt(project: project) : ""
@@ -36,7 +39,7 @@ struct Recognition {
         let prefix = folder.appendingPathComponent("识别原始结果")
         let arguments = [root.appendingPathComponent(".local/models/ggml-small.bin").path,
                          root.appendingPathComponent(".local/models/ggml-silero-v6.2.0.bin").path,
-                         wav.path, prefix.appendingPathExtension("json").path, prompt]
+                         wav.path, prefix.appendingPathExtension("json").path, prompt, language]
         try process(root.appendingPathComponent(".local/bin/source-timed-whisper"), arguments, log: folder.appendingPathComponent("识别.log"))
         let bytes = try Data(contentsOf: prefix.appendingPathExtension("json"))
         let decoded = String(decoding: bytes, as: UTF8.self)
@@ -59,20 +62,21 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
         let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.2.2", "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
-        let note = "本地中文识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
+        let note = "本地原语言识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
         return folder
     }
 }
 
 final class Model: ObservableObject {
+    @Published var language = "zh"
     @Published var project = "默认项目"
     @Published var useLearning = true
     @Published var showLearning = false
     @Published var source: URL?
     @Published var destination = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
     @Published var busy = false
-    @Published var status = "选择音视频后，生成带时间码的中文对白与 SRT 字幕。"
+    @Published var status = "选择音视频后，生成带时间码的原语言对白与 SRT 字幕。"
     @Published var result: URL?
     func chooseFile() {
         let panel = NSOpenPanel(); panel.canChooseDirectories = false
@@ -87,10 +91,10 @@ final class Model: ObservableObject {
     func start() {
         guard let source, !busy else { return }
         let destination = destination
-        let project = project, useLearning = useLearning
+        let project = project, useLearning = useLearning, language = language
         busy = true; result = nil; status = "正在本地识别，请保持窗口打开……"
         DispatchQueue.global(qos: .userInitiated).async {
-            let outcome = Result { try Recognition.run(source: source, destination: destination, project: project, useLearning: useLearning) }
+            let outcome = Result { try Recognition.run(source: source, destination: destination, project: project, useLearning: useLearning, language: language) }
             DispatchQueue.main.async {
                 self.busy = false
                 switch outcome {
@@ -116,7 +120,7 @@ struct WorkspaceView: View {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("本地字幕工具", systemImage: "waveform").font(.title.bold())
-                    Text("音视频转中文对白 · TXT / SRT").foregroundColor(.secondary)
+                    Text("中文 / English / Español · TXT / SRT").foregroundColor(.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -133,7 +137,15 @@ struct WorkspaceView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    sectionTitle("02", "项目与词库")
+                    sectionTitle("02", "识别语言与词库")
+                    Picker("对白语言", selection: $model.language) {
+                        Text("中文").tag("zh")
+                        Text("English / 英语").tag("en")
+                        Text("Español / 西班牙语").tag("es")
+                        Text("自动检测").tag("auto")
+                    }.pickerStyle(.menu).frame(maxWidth: 350)
+                    Text("保留所说语言，不翻译；短句建议手动指定语言。不同语言建议使用不同项目词库。")
+                        .font(.caption).foregroundColor(.secondary)
                     HStack(spacing: 16) {
                         TextField("项目名称", text: $model.project)
                             .textFieldStyle(.roundedBorder)
@@ -219,8 +231,8 @@ final class Delegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 }
 @main struct Launcher {
     static func main() {
-        if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--self-test" {
-            do { print(try Recognition.run(source: URL(fileURLWithPath: CommandLine.arguments[2]), destination: URL(fileURLWithPath: CommandLine.arguments[3])).path) }
+        if (4...5).contains(CommandLine.arguments.count) && CommandLine.arguments[1] == "--self-test" {
+            do { print(try Recognition.run(source: URL(fileURLWithPath: CommandLine.arguments[2]), destination: URL(fileURLWithPath: CommandLine.arguments[3]), language: CommandLine.arguments.count == 5 ? CommandLine.arguments[4] : "zh").path) }
             catch { fputs("\(error)\n", stderr); exit(1) }
             return
         }
