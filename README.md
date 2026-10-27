@@ -2,7 +2,23 @@
 
 一个 macOS 原生小工具：音视频转中文、英语或西班牙语对白，导出带时间码的 TXT 和 SRT；把校对后的 SRT 导回来，积累按项目隔离的本地纠错词库。
 
-当前版本 **0.4.0**。已实现字幕生成和校对词库；音频剪辑、点击对白定位播放、波形和对白重排尚未实现。
+当前版本 **0.4.1**。已实现字幕生成和校对词库；音频剪辑、点击对白定位播放、波形和对白重排尚未实现。
+
+## 直接下载安装
+
+在 [Releases](https://github.com/hhhggg136/local-mp3totxtsrt/releases) 下载 `TingTingBeast-0.4.1-macOS26-AppleSilicon.dmg`，双击后把「本地字幕工具」拖入 Applications，再从应用程序打开。应用保留听听兽图标。
+
+- 此安装包支持 **Apple 芯片 Mac、macOS 26 或更新版本**；未提供 Intel、Windows 或更早 macOS 的安装包。
+- DMG 约 433 MiB，内含识别引擎、small 和 Silero VAD 模型，无需编译、开发环境或手动配置模型。建议预留至少 2 GB 空间，并按素材长度预留额外临时空间。
+- **临时签名，未公证**：当前无 Apple Developer ID 证书，首次打开可能被系统阻止。确认项目下载来源后，如系统提供允许选项，可在「系统设置 → 隐私与安全性」允许打开。不需要关闭系统保护；如果无法正常允许，请停止并反馈。
+- 首次翻译仍可能需要系统下载语言包；语言包下载及实际翻译尚未完成端到端验证。
+- `SHA256SUMS.txt` 提供下载校验值；`verification.json` 是本次安装包的验证摘要。
+
+本次实际挂载 DMG，把程序复制到项目之外，并通过沙箱禁止读取整个开发项目后识别约 84 秒的授权素材，生成 24 条字幕，原视频哈希不变。模型哈希、听听兽图标和嵌套签名检查通过。这验证了当前机器上离开源码目录后的识别流程，不等于其他 Mac 的系统兼容性或未公证程序首次启动验证。
+
+Release 应用优先使用自身内部运行时，可独立移动和安装。下文要求保留 `.local` 相对位置的说明只针对源码构建版。源码 Git 仓库不含模型；Release 二进制安装包单独包含模型和引擎。个人音视频、字幕和学习记录不会打包。
+
+维护者打包：先运行 `bash scripts/build.sh`，再运行 `python3 scripts/package-macos.py`。使用输出的 `package.json` 和授权测试媒体运行 `python3 scripts/verify-package.py /path/to/package.json /path/to/media.mp4` 验证独立运行。第三方许可位于应用包 `Contents/Resources/ThirdPartyLicenses`。
 
 ## 本次更新（0.2.2）
 
