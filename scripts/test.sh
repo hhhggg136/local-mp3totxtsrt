@@ -7,3 +7,6 @@ xcrun swiftc -swift-version 5 -parse-as-library launcher/LearningStore.swift lau
 
 xcrun clang++ -std=c++17 launcher/tests/TimingTests.cpp -o .local/bin/timing-tests
 .local/bin/timing-tests
+
+xcrun swiftc -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/tests/TranslationTests.swift -o .local/bin/translation-tests
+.local/bin/translation-tests

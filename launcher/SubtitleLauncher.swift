@@ -60,7 +60,7 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("字幕.srt"), atomically: true, encoding: .utf8)
         try txt.write(to: folder.appendingPathComponent("对白.txt"), atomically: true, encoding: .utf8)
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
-        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.3.0", "language": language, "alignment": "source-vad-islands-v1"]
+        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.4.0", "language": language, "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
         let note = "本地原语言识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
@@ -183,7 +183,7 @@ struct WorkspaceView: View {
                             .disabled(model.source == nil || model.busy)
                         if model.busy {
                             ProgressView().controlSize(.small)
-                            Text("正在本地识别…").foregroundColor(.secondary)
+                            Text("正在处理…").foregroundColor(.secondary)
                         }
                         if let result = model.result {
                             Button("打开字幕文件夹") { NSWorkspace.shared.open(result) }
@@ -195,6 +195,14 @@ struct WorkspaceView: View {
                         .padding(14)
                         .background(Color.primary.opacity(0.04))
                         .cornerRadius(8)
+                }
+
+                Divider()
+                if #available(macOS 15.0, *) {
+                    TranslationControls(model: model)
+                } else {
+                    Text("翻译与双语字幕需要 macOS 15 或更新版本；原语言识别仍可使用。")
+                        .font(.caption).foregroundColor(.secondary)
                 }
 
                 Text("使用本机 small 模型和人声检测，素材不会上传。\n完成后请核对文字、断句和时间码。音频剪辑和对白重排尚未开放。")
@@ -222,7 +230,7 @@ final class Delegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if model.busy {
-            let alert = NSAlert(); alert.messageText = "识别正在进行"; alert.informativeText = "请等待识别完成后再关闭窗口。"; alert.runModal(); return false
+            let alert = NSAlert(); alert.messageText = "任务正在进行"; alert.informativeText = "请等待识别或翻译完成后再关闭窗口。"; alert.runModal(); return false
         }
         return true
     }
