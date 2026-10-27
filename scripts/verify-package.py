@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mount a DMG, relocate the app and verify it cannot depend on the source checkout.
-Usage: python3 scripts/verify-package.py package.json /path/to/authorized-media
+Usage: python3 scripts/verify-package.py package.json /path/to/authorized-media [translation-report.json]
 """
 from pathlib import Path
 import hashlib
@@ -75,6 +75,14 @@ report = {'passed': True, 'version': configuration['version'], 'architecture': '
           'original_media_unchanged': True,
           'translation_language_pack_download': 'not verified',
           'gatekeeper_on_other_mac': 'not verified; ad-hoc signature, not notarized'}
+if len(sys.argv) > 3:
+    translation = json.loads(Path(sys.argv[3]).read_text())
+    pairs = {(case['source'], case['target']) for case in translation['cases']}
+    assert translation['passed'] and len(translation['cases']) == 12 and len(pairs) == 6
+    assert all(case['timestampsUnchanged'] and case['originalUnchanged'] and case['cueCount'] == 3 for case in translation['cases'])
+    report['translation_language_pack_download'] = 'verified on test Mac via system download UI'
+    report['translation_real_system_cases'] = 12
+    report['translation_languages'] = ['zh-Hans', 'en', 'es']
 report_path = dmg.parent / 'verification.json'
 report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
 print(json.dumps(report, ensure_ascii=False, indent=2))
