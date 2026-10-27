@@ -2,11 +2,11 @@
 
 一个 macOS 原生小工具：音视频转中文、英语或西班牙语对白，导出带时间码的 TXT 和 SRT；把校对后的 SRT 导回来，积累按项目隔离的本地纠错词库。
 
-当前版本 **0.4.2**。已实现字幕生成和校对词库；音频剪辑、点击对白定位播放、波形和对白重排尚未实现。
+当前版本 **0.5.0**。新增本地音频工作台：点击对白定位、单句试听、删除/恢复、裁剪和重排；保存轻量项目，导出音频与对应字幕。
 
 ## 直接下载安装
 
-在 [Releases](https://github.com/hhhggg136/local-mp3totxtsrt/releases) 下载 `TingTingBeast-0.4.2-macOS26-AppleSilicon.dmg`，双击后把「本地字幕工具」拖入 Applications，再从应用程序打开。应用保留听听兽图标。
+在 [Releases](https://github.com/hhhggg136/local-mp3totxtsrt/releases) 下载 `TingTingBeast-0.5.0-macOS26-AppleSilicon.dmg`，双击后把「本地字幕工具」拖入 Applications，再从应用程序打开。应用保留听听兽图标。
 
 - 此安装包支持 **Apple 芯片 Mac、macOS 26 或更新版本**；未提供 Intel、Windows 或更早 macOS 的安装包。
 - DMG 约 433 MiB，内含识别引擎、small 和 Silero VAD 模型，无需编译、开发环境或手动配置模型。建议预留至少 2 GB 空间，并按素材长度预留额外临时空间。
@@ -19,6 +19,21 @@
 Release 应用优先使用自身内部运行时，可独立移动和安装。下文要求保留 `.local` 相对位置的说明只针对源码构建版。源码 Git 仓库不含模型；Release 二进制安装包单独包含模型和引擎。个人音视频、字幕和学习记录不会打包。
 
 维护者打包：先运行 `bash scripts/build.sh`，再运行 `python3 scripts/package-macos.py`。使用输出的 `package.json` 和授权测试媒体运行 `python3 scripts/verify-package.py /path/to/package.json /path/to/media.mp4` 验证独立运行。第三方许可位于应用包 `Contents/Resources/ThirdPartyLicenses`。
+
+## 音频工作台（0.5.0）
+
+在主窗口点击「打开音频工作台」。识别完成后会带入当前素材和字幕，也可独立导入音视频并载入对应 SRT。
+
+- 点击对白文字或时间码定位，点耳机试听该句；连续播放可用空格暂停。
+- 在「剪辑结果」中选择片段，使用上移/下移或拖动到另一片段前重排，删除可撤销或勾选「显示已删除」后恢复。
+- 右侧输入原素材秒数微调片段边界，可修改对白文字。裁剪切入半句会提示核对文字，不自动猜测剩余内容。
+- 「原始素材」为只读预览，保留原声音和时间码；「剪辑结果」显示重排后的波形、播放位置及字幕时间码。
+- 保存为 `.tingting` 项目，仅保存路径、素材指纹和当前编辑状态；再次保存保留一个 `.bak`。最近 50 次撤销只在当前窗口有效。原素材移位后可重新定位，必须是同一份文件。
+- 导出前明确选择原始/剪辑时间线，生成 M4A 或 WAV、对应 SRT/TXT 和映射核对说明；每次使用新文件夹，原素材不变。WAV 为 48 kHz、16 bit，保留单/双声道，多声道转换为双声道。
+
+第一版为单素材、单音轨。视频只编辑音轨；波形是固定 2048 点的概览，支持点击定位。片段以对白分块（重叠对白保持同一块），相邻间隙默认中点分界，首尾及停顿声音保留。边界只能在各块初始范围内裁剪，暂不支持任意选区切割、缩放、多轨或视频导出。
+
+音频引用原文件，播放缓冲目标 2 秒；重排不复制音频，也不启动识别模型。已用可区分的双声道声音验证试听顺序、M4A/WAV 声音顺序与 SRT 时间码一致；27 项编辑核心检查通过。5 分钟真实素材和 61 分钟合成素材完成连续 100 次重排及 WAV 导出：核心处理进程峰值 RSS 约 47 / 51 MiB（不含完整界面、不含识别模型）。完整界面的单独测量与可复现实验见 [工作台验证记录](docs/audio-workbench.md)。
 
 ## 本次更新（0.2.2）
 
@@ -52,7 +67,7 @@ Release 应用优先使用自身内部运行时，可独立移动和安装。下
 
 在 Apple silicon Mac 上验证；源码使用 Swift、SwiftUI、AppKit、AVFoundation、系统 SQLite 和 CryptoKit，无 Python 运行时依赖。建议 macOS 14 或更新版本；实际验证环境为 macOS 26 和 Swift 6.3.3，其他版本尚未验证。
 
-需要 Xcode Command Line Tools（Swift 和 C++ 编译器）、Git、CMake 和 curl。程序及模型尚未制作成包含全部依赖的独立安装包。
+源码构建需要 Xcode Command Line Tools（Swift 和 C++ 编译器）、Git、CMake 和 curl。直接使用上方 Release 安装包无需这些开发工具。
 
 ```bash
 # 只显示下载来源、体积和位置，不下载

@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p .local/bin .local/build
 xcrun swiftc -O -swift-version 5 -parse-as-library launcher/AudioDecoder.swift -o .local/bin/inspect
-xcrun swiftc -O -swift-version 5 -parse-as-library launcher/SubtitleLauncher.swift launcher/LearningStore.swift launcher/LearningPanel.swift launcher/SubtitleTranslation.swift launcher/TranslationControls.swift -o .local/build/SubtitleLauncher
+xcrun swiftc -O -swift-version 5 -parse-as-library launcher/SubtitleLauncher.swift launcher/LearningStore.swift launcher/LearningPanel.swift launcher/SubtitleTranslation.swift launcher/TranslationControls.swift launcher/workbench/*.swift -o .local/build/SubtitleLauncher
 engine=.local/whisper-engine
 if [[ -f "$engine/build/bin/libwhisper.dylib" ]]; then
     xcrun clang++ -O2 -std=c++17 launcher/native/SourceTimedWhisper.cpp -I "$engine/include" -I "$engine/ggml/include" -L "$engine/build/bin" -lwhisper '-Wl,-rpath,@executable_path/../whisper-engine/build/bin' -o .local/bin/source-timed-whisper

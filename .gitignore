@@ -21,3 +21,7 @@ experiments/
 # Generated Python bytecode
 __pycache__/
 *.pyc
+
+# Local workbench project documents
+*.tingting
+*.tingting.bak

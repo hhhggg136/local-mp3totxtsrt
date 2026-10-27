@@ -64,7 +64,7 @@ struct Recognition {
         try srt.write(to: folder.appendingPathComponent("字幕.srt"), atomically: true, encoding: .utf8)
         try txt.write(to: folder.appendingPathComponent("对白.txt"), atomically: true, encoding: .utf8)
         try srt.write(to: folder.appendingPathComponent("学习基准.srt"), atomically: true, encoding: .utf8)
-        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.4.2", "language": language, "alignment": "source-vad-islands-v1"]
+        let metadata: [String: Any] = ["project": project, "learningEnabled": useLearning, "prompt": prompt, "version": "0.5.0", "language": language, "alignment": "source-vad-islands-v1"]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("本次词库.json"), options: .atomic)
         let note = "本地原语言识别结果，文字与时间码需人工核对。\n时间码采用原音频人声区间，停顿不拼接。短语边界依赖人声检测，轻声与背景音乐仍需核对。\n字幕条数：\(count)\n无效或空白片段：\(invalid)（未写入字幕，详见原始结果）\n编码替换字符数：\(decoded.filter { $0 == "\u{fffd}" }.count)（出现 � 的对白需要人工检查）\n原素材未修改。\n"
         try note.write(to: folder.appendingPathComponent("核对说明.txt"), atomically: true, encoding: .utf8)
@@ -73,6 +73,12 @@ struct Recognition {
 }
 
 final class Model: ObservableObject {
+    var workbenchWindow: AudioWorkbenchWindow?
+    @MainActor func openWorkbench() {
+        if let workbenchWindow { workbenchWindow.show(); return }
+        let subtitle = result?.appendingPathComponent("字幕.srt")
+        workbenchWindow = AudioWorkbenchWindow(media: source, subtitle: subtitle) { [weak self] in self?.workbenchWindow = nil }
+    }
     @Published var language = "zh"
     @Published var project = "默认项目"
     @Published var useLearning = true
@@ -123,7 +129,12 @@ struct WorkspaceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("本地字幕工具", systemImage: "waveform").font(.title.bold())
+                    HStack {
+                        Label("本地字幕工具", systemImage: "waveform").font(.title.bold())
+                        Spacer()
+                        Text("v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                     Text("中文 / English / Español · TXT / SRT").foregroundColor(.secondary)
                 }
 
@@ -209,7 +220,18 @@ struct WorkspaceView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
 
-                Text("使用本机 small 模型和人声检测，素材不会上传。\n完成后请核对文字、断句和时间码。音频剪辑和对白重排尚未开放。")
+                Divider()
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("05  音频剪辑工作台").font(.headline)
+                        Text("点击对白定位和试听，删除、裁剪与重排；也可载入已有素材和 SRT。")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("打开音频工作台…", action: model.openWorkbench).disabled(model.busy)
+                }
+
+                Text("使用本机 small 模型和人声检测，素材不会上传。\n完成后请核对文字、断句和时间码。音频工作台只保存片段引用，原素材不会改变。")
                     .font(.caption).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -239,7 +261,12 @@ final class Delegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return true
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { model.busy ? .terminateCancel : .terminateNow }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !model.busy else { return .terminateCancel }
+        if let workbench = model.workbenchWindow, !workbench.requestClose() { return .terminateCancel }
+        model.workbenchWindow?.model.close()
+        return .terminateNow
+    }
 }
 @main struct Launcher {
     static func main() {
