@@ -55,10 +55,21 @@ enum SpeakerClustering {
         guard vectors.count <= dialogues.count * 3, vectors.allSatisfy({ known.contains($0.dialogue) && $0.values.count == 192 }) else {
             throw EditorError.message("说话人模型输出与字幕不匹配。")
         }
+        // Explicitly overlapping captions cannot be separated by a single embedding.
+        var overlapping = Set<UUID>(), chain: [UUID] = [], chainEnd: Int64 = 0
+        for cue in dialogues.sorted(by: { $0.range.start < $1.range.start }) {
+            if cue.range.start >= chainEnd {
+                if chain.count > 1 { overlapping.formUnion(chain) }
+                chain.removeAll(keepingCapacity: true)
+            }
+            chain.append(cue.id); chainEnd = max(chainEnd, cue.range.end)
+        }
+        if chain.count > 1 { overlapping.formUnion(chain) }
         let windows = Dictionary(grouping: vectors, by: \.dialogue)
         var features: [UUID: [Float]] = [:]
         var notes: [UUID: String] = [:]
         for dialogue in dialogues {
+            if overlapping.contains(dialogue.id) { notes[dialogue.id] = "字幕区间与其他对白重叠，需人工核对"; continue }
             let values = (windows[dialogue.id] ?? []).compactMap { normalized($0.values) }
             guard let first = values.first else { notes[dialogue.id] = "声音过短、过轻或无法分析"; continue }
             // Disagreement across a cue is not evidence that its whole text is one speaker.

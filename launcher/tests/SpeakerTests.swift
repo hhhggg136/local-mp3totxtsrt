@@ -24,6 +24,9 @@ import Foundation
         let empty = try SpeakerClustering.group(dialogues: project.dialogues, vectors: [])
         check(empty.speakers.isEmpty && empty.assignments.values.allSatisfy { $0.speakerID == nil }, "静音和过短对白不虚构说话人")
         do { _ = try SpeakerClustering.group(dialogues: project.dialogues, vectors: [SpeakerVector(dialogue: ids[0], values: [1])]); check(false,"拒绝错误向量") } catch { check(true,"拒绝错误向量") }
+        let overlapProject = try AudioEditProject.make(source: source, subtitle: "1\n00:00:01,000 --> 00:00:03,000\n甲\n\n2\n00:00:02,000 --> 00:00:04,000\n乙\n")
+        let overlapData = try SpeakerClustering.group(dialogues: overlapProject.dialogues, vectors: [vector(overlapProject.dialogues[0].id, 0), vector(overlapProject.dialogues[1].id, 1)])
+        check(overlapData.assignments.values.allSatisfy { $0.speakerID == nil && $0.note.contains("重叠") }, "已知重叠字幕不能假装分离出单人")
         let editor = try AudioEditHistory(project: project)
         editor.move(project.order[2], to: 0)
         try editor.installSpeakers(data)
