@@ -202,8 +202,16 @@ class Workspace:
     def edit_text(self):
         cue,_,_=self.selected()
         if not cue:raise UserError('此片段没有对白。')
-        value=dialogs.askstring('编辑对白','修改当前句文字（不修改原始识别文稿）：',initialvalue=cue.text,parent=self.root)
-        if value is not None:self.history.text(cue.id,value);self.mark()
+        window=tk.Toplevel(self.root);window.title('编辑对白');window.geometry('560x260')
+        ttk.Label(window,text='修改当前句文字，原始识别文稿保留。',padding=10).pack(anchor='w')
+        editor=tk.Text(window,wrap='word',height=7);editor.pack(fill='both',expand=True,padx=10);editor.insert('1.0',cue.text)
+        def accept():
+            try:self.history.text(cue.id,editor.get('1.0','end-1c'));self.mark();window.destroy()
+            except UserError as exc:boxes.showerror('无法保存对白',str(exc),parent=window)
+        bar=ttk.Frame(window);bar.pack(pady=8)
+        ttk.Button(bar,text='保存',command=accept).pack(side='left',padx=5)
+        ttk.Button(bar,text='取消',command=window.destroy).pack(side='left',padx=5)
+        window.transient(self.root);window.grab_set();self.root.wait_window(window)
     def trim(self):
         self.editable();_,clip,_=self.selected()
         value=dialogs.askstring('片段边界','输入原素材起止秒数，用空格分隔：',initialvalue=f'{clip.span.start/SCALE:.3f} {clip.span.end/SCALE:.3f}',parent=self.root)

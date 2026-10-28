@@ -32,7 +32,7 @@ def main(report):
             root=Path(folder);runtime=Runtime(data=root/'data');media=Media(runtime)
             original=root/'三个声音.wav'
             runtime.run([runtime.binary('ffmpeg'),'-nostdin','-hide_banner','-v','error','-f','lavfi','-i',
-                'aevalsrc=0.2*sin(2*PI*if(lt(t,4),440,if(lt(t,8),660,880))*t)|0.2*sin(2*PI*if(lt(t,4),660,if(lt(t,8),880,1100))*t):s=48000:d=12',
+                "aevalsrc='0.2*sin(2*PI*if(lt(t,4),440,if(lt(t,8),660,880))*t)|0.2*sin(2*PI*if(lt(t,4),660,if(lt(t,8),880,1100))*t)':s=48000:d=12",
                 '-c:a','pcm_s16le','-y',original])
             source=media.inspect(original)
             p=Project.make(source,'1\n00:00:01,000 --> 00:00:03,000\n第一段\n\n2\n00:00:05,000 --> 00:00:07,000\n第二段\n\n3\n00:00:09,000 --> 00:00:11,000\n第三段\n')
@@ -59,6 +59,15 @@ def main(report):
                 outputs[kind]={'frequenciesHz':found,'durationSeconds':8,'srtTimingVerified':True}
             assert media.verify(source).sha256==source.sha256
             result.update(realAudioExports=outputs,projectRoundtrip=True,sourceUnchanged=True)
+            # A one-hour compressed fixture checks that preparing a long source
+            # grows disk usage instead of keeping the PCM recording in this process.
+            before_long=peak_working_set();long_source=root/'一小时静音.flac'
+            runtime.run([runtime.binary('ffmpeg'),'-nostdin','-hide_banner','-v','error','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t','3600','-c:a','flac','-y',long_source])
+            long_info=media.inspect(long_source);preview=media.prepare(long_info)
+            assert preview.stat().st_size==3600*48000*4
+            after_long=peak_working_set()
+            assert after_long-before_long<64*1024*1024, 'Long audio unexpectedly increased GUI memory'
+            result['oneHourPreparation']={'pcmCacheBytes':preview.stat().st_size,'processPeakBeforeBytes':before_long,'processPeakAfterBytes':after_long,'peakIncreaseBytes':after_long-before_long,'includesChildProcesses':False}
             runtime.close();runtime=None
             # Create actual Tk widgets in the frozen executable, with no global
             # developer Python packages and no production user data directory.
@@ -73,6 +82,10 @@ def main(report):
     except Exception as exc:
         import traceback
         result['error']=str(exc);result['traceback']=traceback.format_exc()
+        if runtime and (runtime.cache/'last-task.log').is_file():
+            with (runtime.cache/'last-task.log').open('rb') as log:
+                log.seek(max(0,(runtime.cache/'last-task.log').stat().st_size-4096))
+                result['componentLogTail']=log.read().decode('utf-8','replace')
     finally:
         if runtime:runtime.close()
         report.parent.mkdir(parents=True,exist_ok=True);report.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')

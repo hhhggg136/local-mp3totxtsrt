@@ -1,5 +1,6 @@
 """Cue-level local speaker candidates. Embeddings are temporary, not enrollment."""
 import math
+import array
 import struct
 import tempfile
 from pathlib import Path
@@ -8,7 +9,7 @@ from .core import UserError, Cancelled, fingerprint
 def normalize(values):
     if not values or not all(math.isfinite(x) for x in values):return None
     n=math.sqrt(sum(x*x for x in values))
-    return tuple(x/n for x in values) if n>0.000001 else None
+    return array.array('f',(x/n for x in values)) if n>0.000001 else None
 
 def cosine(a,b):return sum(x*y for x,y in zip(a,b))
 
@@ -90,7 +91,7 @@ def analyze(project,media,expected=0):
                 raw=stream.read(804)
                 if not raw:break
                 if len(raw)!=804 or len(vectors)>=len(project.cues)*3:raise UserError('说话人结果不完整。')
-                vectors.append((raw[:36].decode('ascii'),struct.unpack('<192f',raw[36:])))
+                vectors.append((raw[:36].decode('ascii'),array.array('f',struct.unpack('<192f',raw[36:]))))
         import json
         metrics=json.loads(stats.read_text(encoding='utf-8'))
         return group(project.cues,vectors,expected,runtime.cancel),metrics
