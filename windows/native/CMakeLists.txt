@@ -6,7 +6,13 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+if(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+ # Upstream MSVC ARM requires this switch; it selects the ARM backend and
+ # does not apply the x86 -march=native compiler option.
+ set(GGML_NATIVE ON CACHE BOOL "" FORCE)
+else()
+ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+endif()
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 # A baseline x64 build works on older Windows CPUs; ARM64 uses native NEON.
 foreach(flag AVX AVX2 AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 FMA F16C BMI2)
