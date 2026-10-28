@@ -1,9 +1,6 @@
 name: Publish verified Windows installers
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/windows-port]
-    paths: ['.github/workflows/publish-windows.yml', 'docs/WINDOWS_RELEASE_0_7_0.md']
 permissions:
   actions: read
   contents: write

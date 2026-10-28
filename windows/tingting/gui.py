@@ -231,7 +231,7 @@ class Workspace:
         self.require()
         count=dialogs.askinteger('区分说话人','预计人数：0 为自动，或输入 1–8。自动分组需要试听核对，重叠对白可能无法区分。',minvalue=0,maxvalue=8,initialvalue=0,parent=self.root)
         if count is None:return
-        if self.project.speakers is not None and not boxes.askyesno('重新分析','将替换当前说话人标记，并清空撤销历史。已保存的项目不受影响。继续？',parent=self.root):return
+        if (self.project.speakers is not None or self.history.undo_stack or self.history.redo_stack) and not boxes.askyesno('分析前确认','将生成新的说话人标记，并清空当前撤销/重做历史。当前文字和剪辑保留，已保存的项目不受影响。继续？',parent=self.root):return
         snapshot=copy.deepcopy(self.project)
         def done(result):self.history.install_speakers(result[0]);self.mark();self.status.set('本地说话人分析完成，请试听核对；分析进程已退出。')
         self.task('本地区分说话人',lambda:speakers.analyze(snapshot,self.media,count),done)
