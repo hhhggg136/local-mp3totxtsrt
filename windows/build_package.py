@@ -8,6 +8,18 @@ from PIL import Image
 
 ROOT=Path(__file__).resolve().parents[1]
 
+def python_licenses(destination):
+    import importlib.metadata
+    destination.mkdir(parents=True,exist_ok=True)
+    for name in ['pyinstaller','ctranslate2','sentencepiece','numpy','PyYAML','sacremoses','regex','click','joblib','tqdm']:
+        try:dist=importlib.metadata.distribution(name)
+        except importlib.metadata.PackageNotFoundError:continue
+        for file in dist.files or []:
+            if any(x in file.name.lower() for x in ['license','copying','notice']) and dist.locate_file(file).is_file():
+                shutil.copy2(dist.locate_file(file),destination/(name+'-'+file.name))
+    for file in [Path(sys.base_prefix)/'LICENSE.txt',Path(sys.base_prefix)/'LICENSE']:
+        if file.is_file():shutil.copy2(file,destination/'Python-LICENSE.txt')
+
 def package(arch,translation):
     stage=ROOT/'.local'/('win-'+arch);dist=stage/'dist';name='TingTingBeast'
     assets=stage/'assets';assets.mkdir(exist_ok=True)
@@ -24,6 +36,7 @@ def package(arch,translation):
     shutil.copy2(Path(translation)/'translation-catalog.json',app/'translation-catalog.json')
     shutil.copy2(ROOT/'LICENSE',app/'LICENSE.txt')
     shutil.copy2(ROOT/'windows/README.md',app/'Windows-README.txt')
+    python_licenses(app/'runtime/licenses/python')
     return app
 
 def worker():
@@ -33,7 +46,9 @@ def worker():
         '--collect-all','ctranslate2','--collect-all','sentencepiece',
         '--distpath',str(stage/'dist'),'--workpath',str(stage/'build'),'--specpath',str(stage),
         str(ROOT/'windows/translate_worker.py')],check=True)
-    return stage/'dist/tingting-translate'
+    output=stage/'dist/tingting-translate';python_licenses(output/'licenses')
+    shutil.copy2(ROOT/'windows/vendor_argos_bpe.py',output/'licenses/Argos-BPE-MIT.py')
+    return output
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--arch',choices=['x64','arm64'])

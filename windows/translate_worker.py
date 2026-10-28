@@ -11,17 +11,28 @@ def translate(request):
     package=Path(request['package'])
     metadata=json.loads((package/'metadata.json').read_text(encoding='utf-8'))
     tokenizer=next((p for p in [package/'sentencepiece.model',package/'spm.model'] if p.is_file()),None)
-    if tokenizer is None:raise ValueError('语言包缺少 SentencePiece 分词器。')
-    sp=sentencepiece.SentencePieceProcessor(model_file=str(tokenizer))
+    if tokenizer:
+        sp=sentencepiece.SentencePieceProcessor(model_file=str(tokenizer))
+        encode=lambda text:sp.encode(text,out_type=str)
+        decode=lambda tokens:sp.decode(tokens).replace('▁',' ').replace('_',' ')
+    elif (package/'bpe.model').is_file():
+        from sacremoses import MosesPunctNormalizer, MosesTokenizer, MosesDetokenizer
+        from vendor_argos_bpe import BPE
+        normalizer=MosesPunctNormalizer(metadata['from_code']);tokenizer=MosesTokenizer(metadata['from_code'])
+        detokenizer=MosesDetokenizer(metadata['to_code'])
+        with (package/'bpe.model').open(encoding='utf-8') as stream:bpe=BPE(stream)
+        encode=lambda text:bpe.segment_tokens(' '.join(tokenizer.tokenize(normalizer.normalize(text))).strip().split(' '))
+        decode=lambda tokens:detokenizer.detokenize(' '.join(tokens).replace('@@ ','').split(' '))
+    else:raise ValueError('语言包缺少兼容分词器。')
     model=ctranslate2.Translator(str(package/'model'),device='cpu',compute_type='int8',inter_threads=1,intra_threads=2)
     prefix=metadata.get('target_prefix','');output=[]
     for text in request['texts']:
-        tokens=sp.encode(text,out_type=str)
+        tokens=encode(text)
         if not tokens or len(tokens)>480:raise ValueError('有对白过长，请先拆成较短句子再翻译。')
         result=model.translate_batch([tokens],target_prefix=[[prefix]] if prefix else None,
             replace_unknowns=True,beam_size=4,max_batch_size=1,batch_type='examples',
             length_penalty=.2,max_input_length=0,max_decoding_length=768)[0]
-        value=sp.decode(result.hypotheses[0]).replace('▁',' ').replace('_',' ').strip()
+        value=decode(result.hypotheses[0]).strip()
         if prefix and value.startswith(prefix):value=value[len(prefix):].strip()
         if not value:raise ValueError('本地模型生成了空译文，请核对语言或重试。')
         output.append(value)

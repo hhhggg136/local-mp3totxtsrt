@@ -192,10 +192,12 @@ class Workspace:
     def play(self):
         self.require()
         if self.player.playing:self.player.stop();return
+        if self.media.preview_hash!=self.project.source.sha256:raise UserError('试听缓存与当前素材不匹配，请重新打开当前项目。')
         timeline=self.timeline();start=self.player.position if self.player.position<timeline.duration else 0
         self.player.play(self.media.preview,timeline,start)
     def audition(self):
         _,_,span=self.selected()
+        if self.media.preview_hash!=self.project.source.sha256:raise UserError('试听缓存与当前素材不匹配，请重新打开当前项目。')
         if span:self.player.play(self.media.preview,self.timeline(),span.start,span.end)
     def edit_text(self):
         cue,_,_=self.selected()

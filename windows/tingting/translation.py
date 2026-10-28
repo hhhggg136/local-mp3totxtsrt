@@ -65,7 +65,7 @@ class Translation:
             candidates=list(stage.glob('*/metadata.json'))+list(stage.glob('metadata.json'))
             if len(candidates)!=1:raise UserError('语言包结构不兼容。')
             package=candidates[0].parent;metadata=json.loads(candidates[0].read_text(encoding='utf-8'))
-            if metadata.get('from_code')+'_'+metadata.get('to_code')!=pair or not (package/'model/model.bin').is_file() or not any((package/n).is_file() for n in ['spm.model','sentencepiece.model']):raise UserError('语言包不兼容。')
+            if metadata.get('from_code','')+'_'+metadata.get('to_code','')!=pair or not (package/'model/model.bin').is_file() or not any((package/n).is_file() for n in ['spm.model','sentencepiece.model','bpe.model']):raise UserError('语言包不兼容。')
             # Per-file hashes detect changes to extracted weights on subsequent jobs.
             hashes={str(p.relative_to(package).as_posix()):fingerprint(p,runtime.cancel) for p in package.rglob('*') if p.is_file()}
             (package/'verified.json').write_text(json.dumps({'archiveSHA256':item['sha256'],'files':hashes}),encoding='utf-8')
