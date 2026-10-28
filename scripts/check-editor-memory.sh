@@ -6,7 +6,7 @@ if [[ "$#" -ne 2 ]]; then
     exit 1
 fi
 mkdir -p .local/bin
-xcrun swiftc -O -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/LearningStore.swift launcher/workbench/EditorTimeline.swift launcher/workbench/EditorMedia.swift launcher/workbench/AudioWorkbenchModel.swift launcher/tests/EditorMemory.swift -o .local/bin/editor-memory
+xcrun swiftc -O -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/LearningStore.swift launcher/workbench/EditorTimeline.swift launcher/workbench/SpeakerTypes.swift launcher/workbench/EditorMedia.swift launcher/workbench/AudioWorkbenchModel.swift launcher/workbench/SpeakerAnalysis.swift launcher/tests/EditorMemory.swift -o .local/bin/editor-memory
 .local/bin/editor-memory --make-long-fixture .local/editor-memory-fixture
 .local/bin/editor-memory "$1" "$2" .local/editor-memory-real > .local/editor-memory-real.log
 .local/bin/editor-memory "$PWD/.local/editor-memory-fixture/synthetic-61min.wav" "$PWD/.local/editor-memory-fixture/synthetic-61min.srt" .local/editor-memory-long > .local/editor-memory-long.log

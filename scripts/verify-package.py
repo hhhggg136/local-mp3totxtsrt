@@ -42,6 +42,9 @@ for name, digest in configuration['models_sha256'].items():
     assert sha(runtime / '.local/models' / name) == digest, name
 binaries = [app / 'Contents/MacOS/SubtitleLauncher', *(runtime / '.local/bin').iterdir()]
 binaries += [p for p in (runtime / '.local/whisper-engine/build/bin').glob('*.dylib') if not p.is_symlink()]
+binaries += list((runtime / '.local/speaker-runtime/lib').glob('*.dylib'))
+if tuple(map(int, configuration['version'].split('.')[:2])) >= (0, 6):
+    assert sha(runtime / '.local/speaker-runtime/campplus-zh-en.onnx') == configuration['speaker_model_sha256']
 for binary in binaries:
     info = subprocess.check_output(['otool', '-L', str(binary)], text=True)
     assert str(root) not in info, binary
@@ -70,7 +73,7 @@ assert (folder / '学习基准.srt').read_bytes() == (folder / '字幕.srt').rea
 assert sha(source) == original_hash
 report = {'passed': True, 'version': configuration['version'], 'architecture': 'arm64',
           'minimum_macos': configuration['minimum_macos'], 'dmg_sha256': sha(dmg),
-          'source_checkout_denied': True, 'bundled_models_verified': True,
+          'source_checkout_denied': True, 'bundled_models_verified': True, 'speaker_runtime_and_model_verified': 'speaker_model_sha256' in configuration,
           'icon_matches_mascot_build': True, 'subtitle_count': len(raw['transcription']),
           'original_media_unchanged': True,
           'translation_language_pack_download': 'not verified',

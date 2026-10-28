@@ -53,7 +53,7 @@ model_dir = runtime / '.local/models'
 lib_dir = runtime / '.local/whisper-engine/build/bin'
 for directory in (bin_dir, model_dir, lib_dir):
     directory.mkdir(parents=True)
-for name in ('inspect', 'source-timed-whisper'):
+for name in ('inspect', 'source-timed-whisper', 'speaker-embeddings'):
     shutil.copy2(ROOT / '.local/bin' / name, bin_dir / name)
 for name in models:
     shutil.copy2(ROOT / '.local/models' / name, model_dir / name)
@@ -79,14 +79,28 @@ for library in sorted(lib_dir.glob('*.dylib')):
         run('install_name_tool', '-delete_rpath', path, library)
     run('install_name_tool', '-add_rpath', '@loader_path', library)
     run('codesign', '--force', '--sign', '-', library)
-for name in ('inspect', 'source-timed-whisper'):
+for name in ('inspect', 'source-timed-whisper', 'speaker-embeddings'):
     run('codesign', '--force', '--sign', '-', bin_dir / name)
+# Speaker inference is an optional action, but the v0.6 installer includes its
+# small local runtime so the installed app never needs the source checkout.
+speaker_source = ROOT / '.local/speaker-runtime'
+speaker_target = runtime / '.local/speaker-runtime'
+speaker_expected = 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2'
+if sha(speaker_source / 'campplus-zh-en.onnx') != speaker_expected:
+    raise SystemExit('Speaker model SHA-256 mismatch')
+(speaker_target / 'lib').mkdir(parents=True)
+for name in ('campplus-zh-en.onnx', 'manifest.json'):
+    shutil.copy2(speaker_source / name, speaker_target / name)
+for name in ('libonnxruntime.dylib', 'libsherpa-onnx-c-api.dylib'):
+    shutil.copy2(speaker_source / 'lib' / name, speaker_target / 'lib' / name)
+    run('codesign', '--force', '--sign', '-', speaker_target / 'lib' / name)
 manifest = {
     'version': version, 'architecture': 'arm64', 'minimum_macos': '26.0',
     'engine': 'whisper.cpp v1.9.5',
     'engine_commit': 'd1be6fde11ac6e0407606b4e42fe72d34add8037',
     'models_sha256': models,
     'speech_alignment': 'source-vad-islands-v1',
+    'speaker_model_sha256': speaker_expected,
     'translation': 'Apple Translation; language packs downloaded through system UI on first use',
 }
 (runtime / 'runtime.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -116,7 +130,7 @@ macOS 可能阻止首次启动。确认下载来自项目 GitHub 后，可到「
 功能：中文、英语、西班牙语及自动识别，输出原文 TXT / SRT，保留停顿；按项目管理校对词库。
 翻译：选择原文、译文语言，点击「一键翻译」。勾选「双语字幕」可额外输出原文在上、译文在下的 SRT。
 首次翻译可能需要由系统下载语言包；已在测试 Mac 实测中文、英语、西班牙语六个互译方向及译文/双语两种导出模式。
-音频工作台：点击对白定位和试听，删除/恢复、裁剪、上移下移或拖动重排，保存轻量 .tingting 项目。
+说话人：在工作台点击「说话人…」本地分析，A/B/C 可批量改名，右侧可纠正单句；导出可选择包含名字。\n分析按原字幕逐句进行，短句、变声、游戏配音和多人重叠均可能分错。不会跨视频记住个人身份。\n音频工作台：点击对白定位和试听，删除/恢复、裁剪、上移下移或拖动重排，保存轻量 .tingting 项目。
 可导出原始或剪辑版 M4A/WAV 及对应 SRT/TXT；原素材不变，视频只处理音轨。
 波形为简略概览，暂不支持任意选区切割、多轨或视频导出。识别文字、时间边界与译文均需要人工核对。
 

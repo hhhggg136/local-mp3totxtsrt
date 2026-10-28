@@ -136,11 +136,11 @@ enum EditorMedia {
             return peaks[max(0, index)]
         }
     }
-    static func export(project: AudioEditProject, mode: EditorTimelineMode, format: EditorAudioFormat, destination: URL) async throws -> AudioEditExportResult {
+    static func export(project: AudioEditProject, mode: EditorTimelineMode, format: EditorAudioFormat, destination: URL, includeSpeakers: Bool = false) async throws -> AudioEditExportResult {
         try project.validate()
         let map = project.timeline(mode)
         guard map.duration > 0 else { throw EditorError.message("没有保留的音频，无法导出。") }
-        let subtitles = try project.subtitles(map: map)
+        let subtitles = try project.subtitles(map: map, includeSpeakers: includeSpeakers)
         _ = try await verify(project.source)
         let composition = try await composition(source: project.source, map: map)
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateFormat = "yyyyMMdd_HHmmss"
@@ -166,7 +166,7 @@ enum EditorMedia {
             }
             let actual = ticks(try await AVURLAsset(url: audio).load(.duration))
             let review = project.projected(map).filter(\.needsTextReview).count
-            let note = "时间线：\(mode.title)\n保留片段：\(map.entries.count)\n字幕：\(project.projected(map).count)\n文字需检查：\(review)\n映射时长：\(EditorClock.timestamp(map.duration))\n音频文件时长：\(EditorClock.timestamp(actual))\n边界微调及原字幕的识别误差需要人工核对。\n原素材未修改；裁剪半句不自动猜测剩余文字。\nM4A 可能存在编码帧粒度差异。\n"
+            let note = "说话人标签：\(includeSpeakers ? "包含（自动结果需核对）" : "不包含")\n时间线：\(mode.title)\n保留片段：\(map.entries.count)\n字幕：\(project.projected(map).count)\n文字需检查：\(review)\n映射时长：\(EditorClock.timestamp(map.duration))\n音频文件时长：\(EditorClock.timestamp(actual))\n边界微调及原字幕的识别误差需要人工核对。\n原素材未修改；裁剪半句不自动猜测剩余文字。\nM4A 可能存在编码帧粒度差异。\n"
             try note.write(to: folder.appendingPathComponent("导出核对说明.txt"), atomically: true, encoding: .utf8)
             let entries = map.entries.map { ["clipID": $0.clipID.uuidString, "sourceStart": String($0.source.start), "sourceEnd": String($0.source.end), "timelineStart": String($0.timeline.start), "timelineEnd": String($0.timeline.end)] }
             let manifest: [String: Any] = ["timeScale": EditorClock.scale, "timeline": mode.rawValue, "sourceSHA256": project.source.sha256, "durationTicks": map.duration, "audioDurationTicks": actual, "entries": entries]

@@ -109,6 +109,7 @@ struct AudioEditProject: Codable, Equatable, Sendable {
     var dialogues: [EditorDialogue]
     var clips: [EditorClip]
     var order: [UUID]
+    var speakerData: SpeakerProjectData? = nil
 
     static func make(source: EditorSource, subtitle: String?) throws -> AudioEditProject {
         let cues = try subtitle.map(SubtitleTranslation.parse) ?? []
@@ -144,7 +145,8 @@ struct AudioEditProject: Codable, Equatable, Sendable {
         return project
     }
     func validate() throws {
-        guard schemaVersion == 1, source.path.hasPrefix("/"), source.fileSize >= 0,
+        try speakerData?.validate(dialogues: Set(dialogues.map(\.id)))
+        guard ((schemaVersion == 1 && speakerData == nil) || (schemaVersion == 2 && speakerData != nil)), source.path.hasPrefix("/"), source.fileSize >= 0,
               source.sha256.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil, source.durationTicks > 0, source.durationTicks < 31_536_000 * EditorClock.scale,
               dialogues.count <= 10000, !clips.isEmpty, clips.count <= 10000,
               Set(order).count == clips.count, Set(order) == Set(clips.map(\.id)), Set(dialogues.map(\.id)).count == dialogues.count else { throw EditorError.message("项目结构不正确或版本不兼容。") }
@@ -201,16 +203,17 @@ struct AudioEditProject: Codable, Equatable, Sendable {
         guard let first = cues.first, let last = cues.max(by: { $0.timeline.end < $1.timeline.end }) else { return entry.timeline }
         return TickRange(start: first.timeline.start, end: last.timeline.end)
     }
-    func subtitles(map: EditorTimelineMap) throws -> (srt: String, txt: String) {
+    func subtitles(map: EditorTimelineMap, includeSpeakers: Bool = false) throws -> (srt: String, txt: String) {
         let cues = projected(map)
         var srt = "", txt = ""
         for (index, cue) in cues.enumerated() {
             let start = EditorClock.timestamp(cue.timeline.start), end = EditorClock.timestamp(cue.timeline.end)
             guard start != end else { throw EditorError.message("有字幕不足 1 毫秒，不能导出有效 SRT，请调整边界。") }
             let lines = cue.text.split(whereSeparator: { $0.isNewline })
-            let text = lines.joined(separator: "\n")
+            let prefix = includeSpeakers && speakerData != nil ? speakerData!.label(cue.dialogueID) + "：" : ""
+            let text = prefix + lines.joined(separator: "\n")
             srt += "\(index + 1)\n\(start) --> \(end)\n\(text)\n\n"
-            txt += "[\(start) → \(end)] \(lines.joined(separator: " / "))\n"
+            txt += "[\(start) → \(end)] \(prefix)\(lines.joined(separator: " / "))\n"
         }
         return (srt, txt)
     }
@@ -225,6 +228,9 @@ final class AudioEditHistory {
         case trim(UUID, TickRange, ClipBoundaryOrigin, Bool, TickRange)
         case text(UUID, String, String)
         case review(UUID, Bool, Bool)
+        case speakerRename(String, String, String)
+        case speakerAssignment(UUID, SpeakerAssignment?, SpeakerAssignment, Bool)
+        case speakerAdd(ProjectSpeaker, Bool)
     }
     private var undoActions: [Action] = []
     private var redoActions: [Action] = []
@@ -251,6 +257,17 @@ final class AudioEditHistory {
             }
         case .text(let id, let old, let new):
             if let i = project.dialogues.firstIndex(where: { $0.id == id }) { project.dialogues[i].text = forward ? new : old }
+        case .speakerRename(let id, let old, let new):
+            if let i = project.speakerData?.speakers.firstIndex(where: { $0.id == id }) { project.speakerData?.speakers[i].name = forward ? new : old }
+        case .speakerAssignment(let id, let old, let new, let existed):
+            if project.speakerData == nil { project.speakerData = SpeakerProjectData() }
+            project.speakerData?.assignments[id] = forward ? new : old
+            if !forward && !existed { project.speakerData = nil }; project.schemaVersion = project.speakerData == nil ? 1 : 2
+        case .speakerAdd(let speaker, let existed):
+            if project.speakerData == nil { project.speakerData = SpeakerProjectData() }
+            if forward { project.speakerData?.speakers.append(speaker) }
+            else { project.speakerData?.speakers.removeAll { $0.id == speaker.id }; if !existed { project.speakerData = nil } }
+            project.schemaVersion = project.speakerData == nil ? 1 : 2
         case .review(let id, let old, let new):
             if let i = project.clips.firstIndex(where: { $0.id == id }) { project.clips[i].textReviewConfirmed = forward ? new : old }
         }
@@ -277,6 +294,27 @@ final class AudioEditHistory {
     func confirmReview(_ id: UUID, confirmed: Bool) {
         guard let clip = project.clips.first(where: { $0.id == id }), clip.textReviewConfirmed != confirmed else { return }
         commit(.review(id, clip.textReviewConfirmed, confirmed))
+    }
+    func installSpeakers(_ data: SpeakerProjectData) throws {
+        try data.validate(dialogues: Set(project.dialogues.map(\.id)))
+        project.speakerData = data; project.schemaVersion = 2
+        // Analysis establishes a new baseline, not 50 copies of a large assignment table.
+        undoActions.removeAll(); redoActions.removeAll()
+    }
+    func addSpeaker() throws {
+        let used = Set(project.speakerData?.speakers.map(\.id) ?? [])
+        guard let id = SpeakerProjectData.codes.first(where: { !used.contains($0) }) else { throw EditorError.message("第一版最多 26 个说话人。") }
+        commit(.speakerAdd(ProjectSpeaker(id: id, name: id), project.speakerData != nil))
+    }
+    func renameSpeaker(_ id: String, name: String) throws {
+        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard SpeakerProjectData.validName(value) else { throw EditorError.message("名字须为 1–40 个字，不能包含冒号或换行。") }
+        guard let speaker = project.speakerData?.speakers.first(where: { $0.id == id }), speaker.name != value else { return }
+        commit(.speakerRename(id, speaker.name, value))
+    }
+    func assignSpeaker(_ dialogue: UUID, speaker: String?) throws {
+        guard project.dialogues.contains(where: { $0.id == dialogue }), speaker == nil || project.speakerData?.speakers.contains(where: { $0.id == speaker }) == true else { throw EditorError.message("请选择项目内的说话人。") }
+        commit(.speakerAssignment(dialogue, project.speakerData?.assignments[dialogue], SpeakerAssignment(speakerID: speaker, manual: true, note: speaker == nil ? "人工设为待确认" : "人工纠正"), project.speakerData != nil))
     }
     func undo() { guard let action = undoActions.popLast() else { return }; apply(action, forward: false); redoActions.append(action) }
     func redo() { guard let action = redoActions.popLast() else { return }; apply(action, forward: true); undoActions.append(action) }

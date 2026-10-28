@@ -11,7 +11,10 @@ xcrun clang++ -std=c++17 launcher/tests/TimingTests.cpp -o .local/bin/timing-tes
 xcrun swiftc -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/tests/TranslationTests.swift -o .local/bin/translation-tests
 .local/bin/translation-tests
 
-xcrun swiftc -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/workbench/EditorTimeline.swift launcher/tests/EditorTimelineTests.swift -o .local/bin/editor-core-tests
+xcrun swiftc -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/workbench/EditorTimeline.swift launcher/workbench/SpeakerTypes.swift launcher/tests/EditorTimelineTests.swift -o .local/bin/editor-core-tests
 .local/bin/editor-core-tests
 
 bash scripts/test-editor-audio.sh
+
+xcrun swiftc -swift-version 5 -parse-as-library launcher/SubtitleTranslation.swift launcher/workbench/EditorTimeline.swift launcher/workbench/SpeakerTypes.swift launcher/tests/SpeakerTests.swift -o .local/bin/speaker-tests
+.local/bin/speaker-tests

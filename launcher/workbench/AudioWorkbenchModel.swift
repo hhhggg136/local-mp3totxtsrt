@@ -39,6 +39,8 @@ struct WorkbenchRow: Identifiable {
     @Published private(set) var relinkAvailable = false
     @Published var selection: UUID?
     @Published var showDeleted = false { didSet { updateVisibleRows() } }
+    @Published var showSpeakers = false
+    @Published private(set) var speakerMetrics: String?
     @Published var showExport = false
 
     var focusWindow: (() -> Void)?
@@ -236,6 +238,32 @@ struct WorkbenchRow: Identifiable {
     }
     func saveText(_ id: UUID, text: String) { edited { try $0.editText(id, text: text) } }
     func confirmReview() { guard let selection else { return }; edited { $0.confirmReview(selection, confirmed: true) } }
+    func addSpeaker() { edited { try $0.addSpeaker() } }
+    func renameSpeaker(_ id: String, name: String) { edited { try $0.renameSpeaker(id, name: name) } }
+    func assignSpeaker(_ dialogue: UUID, speaker: String?) { edited { try $0.assignSpeaker(dialogue, speaker: speaker) } }
+    func analyzeSpeakers(expected: Int) {
+        guard !busy, let project, !project.dialogues.isEmpty, mode == .edited else { return }
+        let alert = NSAlert(); alert.messageText = "开始本地说话人分析？"
+        alert.informativeText = "按原素材对白分析，不识别真实身份。短句、游戏配音、多人重叠可能分错，需要人工核对。完成后替换现有分人结果并清空撤销历史；文字和音频剪辑保留。建议先保存项目，以便保留上一版。"
+        alert.addButton(withTitle: "开始分析"); alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        showSpeakers = false; pause(); busy = true; workID = UUID(); let id = workID
+        status = "正在本地分析说话人；模型仅在独立进程内按需加载，可取消……"
+        work = Task { [weak self] in
+            do {
+                let result = try await EditorMedia.background(priority: .userInitiated) { try await SpeakerAnalysis.run(project: project, expected: expected) }
+                guard let self, self.workID == id, !self.closed, let history = self.history else { return }
+                try history.installSpeakers(result.data)
+                self.busy = false; self.dirty = true; self.lastExport = nil; self.refresh()
+                self.speakerMetrics = String(format: "本次模型进程峰值 RSS %.1f MiB，推理 %.1f 秒；不含窗口和音轨预处理。", Double(result.peakRSSBytes) / 1048576, result.elapsedSeconds)
+                let pending = result.data.assignments.values.filter { $0.speakerID == nil }.count
+                self.status = "分人完成：\(result.data.speakers.count) 个候选说话人，\(pending) 句待确认。自动结果均需试听核对；模型进程已退出。"
+            } catch {
+                guard let self, self.workID == id, !self.closed else { return }
+                self.busy = false; self.status = error is CancellationError ? "分人已取消，当前编辑保留。" : "分人失败，当前编辑保留：\(error.localizedDescription)"
+            }
+        }
+    }
     func undo() { guard !busy, let history, history.canUndo else { return }; history.undo(); dirty = true; refresh(); status = "已撤销。" }
     func redo() { guard !busy, let history, history.canRedo else { return }; history.redo(); dirty = true; refresh(); status = "已重做。" }
     static func secondsText(_ ticks: Int64) -> String { String(format: "%.3f", EditorClock.seconds(ticks)) }
@@ -269,7 +297,7 @@ struct WorkbenchRow: Identifiable {
         contentID = UUID(); waveformTask?.cancel(); sourcePeaks = []; waveform = []
         history = try? AudioEditHistory(project: loaded)
         projectURL = document; dirty = false; busy = false; lastExport = nil
-        selection = nil; mode = .edited; refresh()
+        selection = nil; mode = .edited; speakerMetrics = nil; refresh()
         waveformLoading = true
         let source = loaded.source, id = contentID
         waveformTask = Task { [weak self] in
@@ -361,13 +389,13 @@ struct WorkbenchRow: Identifiable {
         default: return false
         }
     }
-    func beginExport(mode: EditorTimelineMode, format: EditorAudioFormat, destination: URL) {
+    func beginExport(mode: EditorTimelineMode, format: EditorAudioFormat, destination: URL, includeSpeakers: Bool = false) {
         guard !busy, let project else { return }
         pause(); busy = true; lastExport = nil; workID = UUID(); let id = workID
         status = "正在导出\(mode.title)的音频和字幕……"
         work = Task { [weak self] in
             do {
-                let result = try await EditorMedia.background(priority: .userInitiated) { try await EditorMedia.export(project: project, mode: mode, format: format, destination: destination) }
+                let result = try await EditorMedia.background(priority: .userInitiated) { try await EditorMedia.export(project: project, mode: mode, format: format, destination: destination, includeSpeakers: includeSpeakers) }
                 guard let self, self.workID == id, !self.closed else { return }
                 self.busy = false; self.lastExport = result.folder
                 self.status = "导出完成：\(mode.title)，需核对文字 \(result.needsReview) 条。原素材未修改。"

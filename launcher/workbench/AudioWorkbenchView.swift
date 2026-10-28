@@ -21,6 +21,7 @@ struct AudioWorkbenchView: View {
                 Button("保存项目") { model.saveProject() }.disabled(model.project == nil)
                     .keyboardShortcut("s", modifiers: .command)
                 Button("另存…") { model.saveProject(asNew: true) }.disabled(model.project == nil)
+                Button("说话人…") { model.pause(); model.showSpeakers = true }.disabled(model.project == nil || model.mode == .original)
                 Spacer()
                 Button("撤销", action: model.undo).disabled(!model.canUndo || model.mode == .original)
                     .keyboardShortcut("z", modifiers: .command)
@@ -95,6 +96,7 @@ struct AudioWorkbenchView: View {
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(22).frame(minWidth: 1000, minHeight: 690)
+        .sheet(isPresented: $model.showSpeakers, onDismiss: { model.focusWindow?() }) { WorkbenchSpeakerSheet(model: model) }
         .sheet(isPresented: $model.showExport, onDismiss: { model.focusWindow?() }) { WorkbenchExportSheet(model: model) }
     }
 }
@@ -125,7 +127,7 @@ private struct WorkbenchClipRow: View {
                 ForEach(row.dialogues) { dialogue in
                     HStack(alignment: .top) {
                         Button { model.locateDialogue(clip: row.id, dialogue: dialogue.id) } label: {
-                            Text(dialogue.text).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+                            Text((model.project?.speakerData.map { $0.label(dialogue.id) + "：" } ?? "") + dialogue.text).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                                 .strikethrough(row.dialogueRanges[dialogue.id] == nil && model.mode == .edited)
                         }.buttonStyle(.plain).disabled(row.dialogueRanges[dialogue.id] == nil || !model.ready || model.busy)
                         if row.dialogues.count > 1 {
@@ -198,6 +200,13 @@ private struct WorkbenchInspector: View {
                         VStack(alignment: .leading, spacing: 7) {
                             TextField("对白文字", text: Binding(get: { texts[dialogue.id] ?? dialogue.text }, set: { texts[dialogue.id] = $0 }), axis: .vertical)
                                 .textFieldStyle(.roundedBorder).lineLimit(2...6)
+                            if model.project?.speakerData != nil {
+                                Picker("这句说话人", selection: Binding(get: { model.project?.speakerData?.assignments[dialogue.id]?.speakerID ?? "" }, set: { model.assignSpeaker(dialogue.id, speaker: $0.isEmpty ? nil : $0) })) {
+                                    Text("待确认 / 未指定").tag("")
+                                    ForEach(model.project?.speakerData?.speakers ?? []) { Text($0.title).tag($0.id) }
+                                }
+                                Text(model.project?.speakerData?.assignments[dialogue.id]?.note ?? "待确认").font(.caption).foregroundColor(.secondary)
+                            }
                             Button("保存这句文字") { model.saveText(dialogue.id, text: texts[dialogue.id] ?? dialogue.text); resetFields() }
                         }
                     }
@@ -261,13 +270,14 @@ private struct WorkbenchExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMode: EditorTimelineMode
     @State private var format: EditorAudioFormat = .m4a
+    @State private var includeSpeakers = true
     init(model: AudioWorkbenchModel) { self.model = model; _selectedMode = State(initialValue: model.mode) }
     private var map: EditorTimelineMap { model.project?.timeline(selectedMode) ?? EditorTimelineMap(entries: []) }
     private var cues: [ProjectedDialogue] { model.project?.projected(map) ?? [] }
     private func chooseAndExport() {
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true; panel.title = "选择导出文件夹（将新建独立文件夹）"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
-        model.beginExport(mode: selectedMode, format: format, destination: destination)
+        model.beginExport(mode: selectedMode, format: format, destination: destination, includeSpeakers: includeSpeakers && model.project?.speakerData != nil)
         dismiss()
     }
     var body: some View {
@@ -277,6 +287,7 @@ private struct WorkbenchExportSheet: View {
             Text("本次导出：\(selectedMode.title)").font(.headline)
             Text("时长 \(EditorClock.timestamp(map.duration)) · 音频块 \(map.entries.count) · 字幕 \(cues.count) 条")
             Picker("音频格式", selection: $format) { ForEach(EditorAudioFormat.allCases) { Text($0.title).tag($0) } }
+            if model.project?.speakerData != nil { Toggle("字幕和 TXT 包含说话人名字", isOn: $includeSpeakers) }
             if cues.isEmpty { Text("没有可导出的对白，只生成音频和核对说明。") }
             if cues.contains(where: \.needsTextReview) {
                 Text("有 \(cues.filter(\.needsTextReview).count) 条对白被裁剪，文字需核对。导出保留当前文字，不自动猜测半句内容。")

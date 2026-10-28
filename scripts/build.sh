@@ -10,6 +10,10 @@ if [[ -f "$engine/build/bin/libwhisper.dylib" ]]; then
 else
     printf '尚未配置 whisper.cpp；窗口可以构建，识别前请运行 setup-local.sh --download。\n' >&2
 fi
+if [[ -f .local/speaker-runtime/include/sherpa-onnx/c-api/c-api.h && -f .local/speaker-runtime/lib/libsherpa-onnx-c-api.dylib ]]; then
+    xcrun clang++ -O2 -std=c++17 launcher/native/SpeakerEmbeddings.cpp -I .local/speaker-runtime/include -L .local/speaker-runtime/lib -lsherpa-onnx-c-api '-Wl,-rpath,@executable_path/../speaker-runtime/lib' -o .local/bin/speaker-embeddings
+    codesign --force --sign - .local/bin/speaker-embeddings
+fi
 app='本地字幕工具.app'
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .local/build/SubtitleLauncher "$app/Contents/MacOS/SubtitleLauncher"
