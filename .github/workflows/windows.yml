@@ -29,7 +29,9 @@ jobs:
         if: always()
         with:
           name: translation-verification
-          path: .local/translation-verification.json
+          path: |
+            .local/translation-verification.json
+            .local/translation-worker/dist/tingting-translate/translation-catalog.json
           include-hidden-files: true
   native:
     needs: translation
@@ -61,6 +63,11 @@ jobs:
           path: .local/translation-artifact
       - run: python -m pip install -r windows/requirements-build.txt
       - run: python windows/build_package.py --arch ${{ matrix.arch }} --translation .local/translation-artifact
+      - name: Verify local translation worker under ARM64 x64 emulation
+        if: matrix.arch == 'arm64'
+        run: |
+          python windows/build_translation_catalog.py .local/translation-artifact/translation-catalog.json
+          python windows/tests/translation_probe.py .local/translation-artifact .local/win-arm64/translation-verification.json
       - name: Build per-user installer
         shell: pwsh
         run: |
@@ -92,5 +99,6 @@ jobs:
           path: |
             .local/win-${{ matrix.arch }}/native-verification.json
             .local/win-${{ matrix.arch }}/installed-verification.json
+            .local/win-${{ matrix.arch }}/translation-verification.json
           include-hidden-files: true
           if-no-files-found: warn

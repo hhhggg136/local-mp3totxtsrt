@@ -268,11 +268,22 @@ class Workspace:
     def translate(self):
         self.require()
         from .translation import Translation, route
-        value=dialogs.askstring('一键翻译','输入原文和译文语言代码，用空格分隔。\n中文 zh、英语 en、西班牙语 es；例如 zh en。\n中西互译经英语中转，译文需要人工核对。',initialvalue='zh en',parent=self.root)
-        if value is None:return
-        parts=value.strip().split()
-        if len(parts)!=2:raise UserError('请输入原文和译文两个语言代码。')
-        source,target=parts;route(source,target);translator=Translation(self.runtime)
+        window=tk.Toplevel(self.root);window.title('一键翻译');window.geometry('420x240');choice=[]
+        languages={'中文':'zh','英语':'en','西班牙语':'es'}
+        original=tk.StringVar(value=self.language.get() if self.language.get() in languages else '中文')
+        translated=tk.StringVar(value='英语' if original.get()=='中文' else '中文')
+        ttk.Label(window,text='原文语言',padding=(12,8)).pack(anchor='w')
+        ttk.Combobox(window,textvariable=original,values=list(languages),state='readonly').pack(fill='x',padx=12)
+        ttk.Label(window,text='译文语言',padding=(12,8)).pack(anchor='w')
+        ttk.Combobox(window,textvariable=translated,values=list(languages),state='readonly').pack(fill='x',padx=12)
+        ttk.Label(window,text='中西互译经英语中转，译文需要人工核对。',padding=8).pack()
+        def accept():
+            if original.get()==translated.get():boxes.showerror('请选择不同语言','原文与译文语言不能相同。',parent=window);return
+            choice.extend([languages[original.get()],languages[translated.get()]]);window.destroy()
+        ttk.Button(window,text='继续',command=accept).pack()
+        window.transient(self.root);window.grab_set();self.root.wait_window(window)
+        if not choice:return
+        source,target=choice;route(source,target);translator=Translation(self.runtime)
         missing=translator.missing(source,target);imports={}
         if missing:
             summary='\n\n'.join(f'{pair}：{info["bytes"]/1048576:.1f} MiB\n来源：{info["url"]}' for pair,info in missing)

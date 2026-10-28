@@ -14,6 +14,7 @@ def build(output):
             if archive.testzip():raise ValueError('Corrupt package: '+pair)
             print(pair,archive.namelist()[:35],flush=True)
         result[pair]={'url':url,'sha256':sha(file),'bytes':file.stat().st_size}
+    print(json.dumps(result,sort_keys=True),flush=True)
     Path(output).parent.mkdir(parents=True,exist_ok=True)
     Path(output).write_text(json.dumps(result,indent=2),encoding='utf-8')
 
