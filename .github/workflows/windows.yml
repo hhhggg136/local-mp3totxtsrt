@@ -1,0 +1,36 @@
+name: Windows local build
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/windows-port]
+    paths: ['windows/**', 'launcher/native/**', '.github/workflows/windows.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Build native local runtime
+        run: python windows/build_runtime.py --arch ${{ matrix.arch }}
+      - name: Test real inference and Chinese paths
+        run: python windows/tests/native_probe.py .local/win-${{ matrix.arch }}/runtime
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-verification-${{ matrix.arch }}
+          path: .local/win-${{ matrix.arch }}/native-verification.json
+          if-no-files-found: warn

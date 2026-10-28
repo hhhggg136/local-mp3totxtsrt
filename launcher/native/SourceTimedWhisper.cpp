@@ -83,6 +83,9 @@ int main(int argc,char** argv) {
   std::unique_ptr<whisper_context,decltype(&whisper_free)> recognizer(nullptr,whisper_free);
   if(!ranges.empty()) {
    auto config=whisper_context_default_params();
+#ifdef _WIN32
+   config.use_gpu=false;
+#endif
    recognizer.reset(whisper_init_from_file_with_params(argv[1],config));
    if(!recognizer)throw std::runtime_error("failed to load speech model");
   }

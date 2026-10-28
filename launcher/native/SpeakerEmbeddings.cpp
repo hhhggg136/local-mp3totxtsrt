@@ -10,7 +10,15 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 static uint32_t u32(std::istream &s) {
   unsigned char b[4]; if (!s.read(reinterpret_cast<char *>(b),4)) throw std::runtime_error("Truncated WAV");
@@ -81,9 +89,15 @@ int main(int argc, char **argv) {
     }
     out.close(); if(!out) throw std::runtime_error("Result write failed");
     SherpaOnnxDestroySpeakerEmbeddingExtractor(ex);
-    struct rusage usage{};getrusage(RUSAGE_SELF,&usage);
+    uint64_t peak_rss=0;
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS memory{}; memory.cb=sizeof(memory);
+    if(GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory))) peak_rss=memory.PeakWorkingSetSize;
+#else
+    struct rusage usage{};getrusage(RUSAGE_SELF,&usage);peak_rss=usage.ru_maxrss;
+#endif
     double elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count();
-    std::ofstream stats(argv[5]);stats<<"{\"peakRSSBytes\":"<<usage.ru_maxrss<<",\"elapsedSeconds\":"<<elapsed<<",\"cues\":"<<cues<<",\"windows\":"<<windows<<"}\n";
+    std::ofstream stats(argv[5]);stats<<"{\"peakRSSBytes\":"<<peak_rss<<",\"elapsedSeconds\":"<<elapsed<<",\"cues\":"<<cues<<",\"windows\":"<<windows<<"}\n";
     if(!stats) throw std::runtime_error("Stats write failed");
     return 0;
   } catch(const std::exception &e) { std::cerr<<e.what()<<'\n';return 1; }
