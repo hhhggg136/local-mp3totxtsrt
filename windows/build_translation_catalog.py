@@ -12,6 +12,7 @@ def build(output):
         import zipfile
         with zipfile.ZipFile(file) as archive:
             if archive.testzip():raise ValueError('Corrupt package: '+pair)
+            print(pair,archive.namelist()[:35],flush=True)
         result[pair]={'url':url,'sha256':sha(file),'bytes':file.stat().st_size}
     Path(output).parent.mkdir(parents=True,exist_ok=True)
     Path(output).write_text(json.dumps(result,indent=2),encoding='utf-8')
