@@ -10,6 +10,11 @@ if(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
  # Upstream MSVC ARM requires this switch; it selects the ARM backend and
  # does not apply the x86 -march=native compiler option.
  set(GGML_NATIVE ON CACHE BOOL "" FORCE)
+ # Keep the distributed ARM binary at the baseline NEON/FMA level instead
+ # of baking Azure's optional i8mm/dotprod instruction set into every PC.
+ foreach(feature dotprod i8mm sve sme)
+  set(GGML_MACHINE_SUPPORTS_${feature} FALSE CACHE BOOL "" FORCE)
+ endforeach()
 else()
  set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 endif()

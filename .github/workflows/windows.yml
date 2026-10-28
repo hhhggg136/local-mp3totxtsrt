@@ -6,6 +6,8 @@ on:
     paths: ['windows/**', 'launcher/native/**', '.github/workflows/windows.yml']
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
 jobs:
   translation:
     runs-on: windows-2025

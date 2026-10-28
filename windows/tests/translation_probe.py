@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='翻译 实测 ') as temp:
                 assert plain[0].span==bilingual[0].span==p.cues[0].span
                 assert bilingual[0].text==phrases[source]+'\n'+plain[0].text
                 assert plain[0].text.strip() and '\ufffd' not in plain[0].text
-                print('TRANSLATION_RESULT='+plain[0].text,flush=True)
+                print('TRANSLATION_RESULT='+json.dumps(plain[0].text,ensure_ascii=True),flush=True)
                 metrics=json.loads((folder/'翻译说明.json').read_text(encoding='utf-8'))
                 assert all(m['peakWorkingSetBytes']>0 for m in metrics['workerMetrics'])
                 results.append({'source':source,'target':target,'original':phrases[source],'translation':plain[0].text,'timecodesUnchanged':True,'sourcePreserved':True,**metrics})
