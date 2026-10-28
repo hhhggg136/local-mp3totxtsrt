@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix='翻译 实测 ') as temp:
         for source in phrases:
             for target in phrases:
                 if source==target:continue
+                print('TRANSLATION_DIRECTION='+source+'_'+target,flush=True)
                 p=Project.make(Source(str(root/'source.wav'),4*SCALE,0,'a'*64),f'1\n00:00:01,000 --> 00:00:03,000\n{phrases[source]}\n')
                 before=copy.deepcopy(p);folder=translator.translate(p,root,source,target)
                 plain=parse_srt((folder/'译文.srt').read_text(encoding='utf-8'))
@@ -30,6 +31,7 @@ with tempfile.TemporaryDirectory(prefix='翻译 实测 ') as temp:
                 assert plain[0].span==bilingual[0].span==p.cues[0].span
                 assert bilingual[0].text==phrases[source]+'\n'+plain[0].text
                 assert plain[0].text.strip() and '\ufffd' not in plain[0].text
+                print('TRANSLATION_RESULT='+plain[0].text,flush=True)
                 metrics=json.loads((folder/'翻译说明.json').read_text(encoding='utf-8'))
                 assert all(m['peakWorkingSetBytes']>0 for m in metrics['workerMetrics'])
                 results.append({'source':source,'target':target,'original':phrases[source],'translation':plain[0].text,'timecodesUnchanged':True,'sourcePreserved':True,**metrics})

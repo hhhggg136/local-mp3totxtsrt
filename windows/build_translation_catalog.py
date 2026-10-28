@@ -6,9 +6,12 @@ from tingting.translation import PAIRS
 
 def build(output):
     cache=Path('.local/translation-downloads');cache.mkdir(parents=True,exist_ok=True)
+    pinned=json.loads(Path(__file__).with_name('translation-catalog.json').read_text(encoding='utf-8'))
     result={}
     for pair,url in PAIRS.items():
-        file=download(url,cache/(pair+'.argosmodel'))
+        if pinned[pair]['url']!=url:raise ValueError('Package source differs from pinned catalog')
+        file=download(url,cache/(pair+'.argosmodel'),pinned[pair]['sha256'])
+        if file.stat().st_size!=pinned[pair]['bytes']:raise ValueError('Package size differs from pinned catalog')
         import zipfile
         with zipfile.ZipFile(file) as archive:
             if archive.testzip():raise ValueError('Corrupt package: '+pair)

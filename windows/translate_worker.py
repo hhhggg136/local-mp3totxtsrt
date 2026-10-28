@@ -25,16 +25,19 @@ def translate(request):
         decode=lambda tokens:detokenizer.detokenize(' '.join(tokens).replace('@@ ','').split(' '))
     else:raise ValueError('语言包缺少兼容分词器。')
     model=ctranslate2.Translator(str(package/'model'),device='cpu',compute_type='int8',inter_threads=1,intra_threads=2)
-    prefix=metadata.get('target_prefix','');output=[]
+    prefix=metadata.get('target_prefix','');output=[];token_counts=[]
     for text in request['texts']:
         tokens=encode(text)
-        if not tokens or len(tokens)>480:raise ValueError('有对白过长，请先拆成较短句子再翻译。')
+        if not tokens:raise ValueError('本地分词结果为空，请核对原文语言。')
+        if len(tokens)>480:raise ValueError(f'有对白过长（{metadata["from_code"]}→{metadata["to_code"]}，{len(text)} 字符/{len(tokens)} 词元），请先拆成较短句子再翻译。')
+        token_counts.append(len(tokens))
         result=model.translate_batch([tokens],target_prefix=[[prefix]] if prefix else None,
             replace_unknowns=True,beam_size=4,max_batch_size=1,batch_type='examples',
             length_penalty=.2,max_input_length=0,max_decoding_length=768)[0]
         value=decode(result.hypotheses[0]).strip()
         if prefix and value.startswith(prefix):value=value[len(prefix):].strip()
         if not value:raise ValueError('本地模型生成了空译文，请核对语言或重试。')
+        if len(result.hypotheses[0])>=768:raise ValueError('翻译模型未能正常结束此句，请拆句或调整原文后重试。')
         output.append(value)
     metrics={}
     if os.name=='nt':
@@ -45,7 +48,7 @@ def translate(request):
         ctypes.windll.psapi.GetProcessMemoryInfo.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_uint32]
         if ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(),counters,80):
             metrics['peakWorkingSetBytes']=struct.unpack_from('<Q',counters,8)[0]
-    return {'texts':output,'engine':'CTranslate2 '+ctranslate2.__version__,'source':metadata['from_code'],'target':metadata['to_code'],**metrics}
+    return {'texts':output,'engine':'CTranslate2 '+ctranslate2.__version__,'source':metadata['from_code'],'target':metadata['to_code'],'inputTokenCounts':token_counts,**metrics}
 
 
 def main():

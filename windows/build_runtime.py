@@ -37,6 +37,8 @@ def download(url,path,expected=None):
    request=urllib.request.Request(url,headers={'User-Agent':'TingTingBeast-build/0.7'})
    with urllib.request.urlopen(request,timeout=90) as response,temp.open('xb') as output:
     shutil.copyfileobj(response,output,1024*1024)
+    length=response.headers.get('Content-Length')
+    if length and output.tell()!=int(length):raise ValueError('Incomplete download: '+path.name)
    if expected and sha(temp)!=expected:raise ValueError('SHA-256 mismatch: '+path.name)
    os.replace(temp,path);return path
   except Exception as exc:error=exc
