@@ -11,6 +11,7 @@ def translate(request):
     package=Path(request['package'])
     metadata=json.loads((package/'metadata.json').read_text(encoding='utf-8'))
     tokenizer=next((p for p in [package/'sentencepiece.model',package/'spm.model'] if p.is_file()),None)
+    uses_bpe=tokenizer is None
     if tokenizer:
         sp=sentencepiece.SentencePieceProcessor(model_file=str(tokenizer))
         encode=lambda text:sp.encode(text,out_type=str)
@@ -24,7 +25,11 @@ def translate(request):
         encode=lambda text:bpe.segment_tokens(' '.join(tokenizer.tokenize(normalizer.normalize(text))).strip().split(' '))
         decode=lambda tokens:detokenizer.detokenize(' '.join(tokens).replace('@@ ','').split(' '))
     else:raise ValueError('语言包缺少兼容分词器。')
-    model=ctranslate2.Translator(str(package/'model'),device='cpu',compute_type='int8',inter_threads=1,intra_threads=2)
+    # The larger legacy Spanish BPE model produced nonterminating output with
+    # int8 under Windows ARM's x64 emulation. Check the full-precision path;
+    # keep smaller SentencePiece models quantized and measure both in CI.
+    compute='float32' if uses_bpe else 'int8'
+    model=ctranslate2.Translator(str(package/'model'),device='cpu',compute_type=compute,inter_threads=1,intra_threads=2)
     prefix=metadata.get('target_prefix','');output=[];token_counts=[]
     for text in request['texts']:
         tokens=encode(text)
@@ -48,7 +53,7 @@ def translate(request):
         ctypes.windll.psapi.GetProcessMemoryInfo.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_uint32]
         if ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(),counters,80):
             metrics['peakWorkingSetBytes']=struct.unpack_from('<Q',counters,8)[0]
-    return {'texts':output,'engine':'CTranslate2 '+ctranslate2.__version__,'source':metadata['from_code'],'target':metadata['to_code'],'inputTokenCounts':token_counts,**metrics}
+    return {'texts':output,'engine':'CTranslate2 '+ctranslate2.__version__,'computeType':compute,'source':metadata['from_code'],'target':metadata['to_code'],'inputTokenCounts':token_counts,**metrics}
 
 
 def main():
