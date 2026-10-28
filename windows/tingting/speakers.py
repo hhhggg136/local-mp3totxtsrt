@@ -76,6 +76,7 @@ def group(cues,vectors,expected=0,cancel=None):
 
 def analyze(project,media,expected=0):
     if not project.cues:raise UserError('请先载入对应 SRT。')
+    media.verify(project.source)
     runtime=media.runtime;model=runtime.model('campplus-zh-en.onnx')
     with tempfile.TemporaryDirectory(prefix='speakers-',dir=runtime.cache) as temp:
         temp=Path(temp);wav=temp/'audio.wav';ranges=temp/'ranges.tsv';out=temp/'vectors.bin';stats=temp/'stats.json'

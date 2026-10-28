@@ -59,7 +59,14 @@ class Runtime:
         child_env=os.environ.copy();child_env['PYTHONUTF8']='1'
         if env:child_env.update(env)
         flags=(subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS) if os.name=='nt' else 0
-        process=subprocess.Popen(args,stdin=stdin,stdout=stdout,stderr=stderr,creationflags=flags,env=child_env,cwd=str(Path(args[0]).parent))
+        if os.name=='nt' and getattr(sys,'frozen',False):
+            import ctypes
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        try:
+            process=subprocess.Popen(args,stdin=stdin,stdout=stdout,stderr=stderr,creationflags=flags,env=child_env,cwd=str(Path(args[0]).parent))
+        finally:
+            if os.name=='nt' and getattr(sys,'frozen',False):
+                ctypes.windll.kernel32.SetDllDirectoryW(str(sys._MEIPASS))
         with self.lock:self.process=process
         return process
     def finish(self,process):
@@ -132,7 +139,7 @@ class Media:
         try:
             self.runtime.run(args)
             # Clamp/pad to the exact shared 48 kHz frame count, not the encoder's
-            # packet boundaries. Padding is sparse and never materialized in RAM.
+            # packet boundaries. Padding is file based and never materialized in RAM.
             with target.open('r+b') as stream:stream.truncate(required)
         except BaseException:target.unlink(missing_ok=True);raise
         if self.preview:self.preview.unlink(missing_ok=True)
@@ -176,6 +183,7 @@ class Media:
         project.validate();timeline=project.timeline(mode)
         if not timeline.duration:raise UserError('没有保留的音频片段。')
         srt,txt=project.subtitles(timeline,names)
+        self.verify(project.source)
         preview=self.prepare(project.source) if audio else None
         folder=new_output(destination,project.source,'原始素材' if mode=='original' else '剪辑结果')
         stem=folder.name
