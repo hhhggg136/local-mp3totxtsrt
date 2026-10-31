@@ -77,6 +77,21 @@ def main(report):
             window=tk.Tk();workspace=Workspace(window);window.update()
             workspace.wave=[.5]*2048;workspace.install(p);window.update()
             assert len(workspace.tree.get_children())==3
+            toggles=[];real_play=workspace.play
+            workspace.play=lambda:toggles.append(True)
+            workspace.tree.focus_force();window.update()
+            workspace.tree.event_generate('<KeyPress-space>');window.update()
+            workspace.tree.event_generate('<KeyPress-space>');window.update()
+            assert len(toggles)==1, 'Held space toggled playback repeatedly'
+            workspace.tree.event_generate('<KeyRelease-space>');window.update()
+            workspace.tree.event_generate('<KeyPress-space>');window.update()
+            assert len(toggles)==2, 'Space did not toggle playback after release'
+            workspace.tree.event_generate('<KeyRelease-space>');window.update()
+            entry=tk.Entry(window);entry.pack();entry.focus_force();window.update()
+            entry.event_generate('<KeyPress-space>');entry.event_generate('<KeyRelease-space>');window.update()
+            assert entry.get()==' ' and len(toggles)==2, 'Space interrupted text input'
+            workspace.play=real_play
+            result['spaceShortcutVerified']=True
             workspace.player.stop();workspace.runtime.close();window.destroy()
             result.update(guiCreated=True,guiAndExportProcessPeakWorkingSetBytes=peak_working_set(),passed=True)
     except Exception as exc:

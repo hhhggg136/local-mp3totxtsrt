@@ -24,7 +24,23 @@ class Workspace:
         root.title('听听兽 · 本地字幕工具 '+VERSION);root.geometry('1120x780');root.minsize(900,620)
         icon=self.runtime.root/'assets/listening-mascot.ico'
         if icon.exists():root.iconbitmap(str(icon))
-        self.build();root.protocol('WM_DELETE_WINDOW',self.close);root.after(80,self.tick)
+        self.build();self.space_down=False
+        root.bind('<KeyPress-space>',self.space_press,add='+')
+        root.bind('<KeyRelease-space>',self.space_release,add='+')
+        root.bind('<FocusOut>',self.space_release,add='+')
+        root.protocol('WM_DELETE_WINDOW',self.close);root.after(80,self.tick)
+
+    def space_press(self,event):
+        # Preserve text entry and native button/combobox keyboard behavior.
+        if event.widget.winfo_class() in ('Entry','TEntry','Text','TCombobox','Button','TButton','Spinbox','TSpinbox'):
+            return
+        if not self.space_down:
+            self.space_down=True
+            if self.project is not None:self.guard(self.play)
+        return 'break'
+
+    def space_release(self,event):
+        self.space_down=False
 
     def button(self,parent,text,command):
         button=ttk.Button(parent,text=text,command=lambda:self.guard(command));button.pack(side='left',padx=3,pady=4)
@@ -47,7 +63,7 @@ class Workspace:
         ttk.Label(bar,textvariable=self.clock).pack(side='right',padx=8)
         self.canvas=tk.Canvas(self.root,height=92,background='#edf3f6',highlightthickness=0);self.canvas.pack(fill='x',padx=15,pady=8)
         self.canvas.bind('<Configure>',lambda e:self.draw_wave());self.canvas.bind('<Button-1>',self.seek_wave)
-        ttk.Label(self.root,text='原始时间线保留素材时间；剪辑时间线按保留片段顺序播放和导出。裁剪后的文字需人工核对。',padding=(15,0)).pack(anchor='w')
+        ttk.Label(self.root,text='空格：播放 / 停止。原始时间线保留素材时间；剪辑时间线按保留片段顺序播放和导出。裁剪后的文字需人工核对。',padding=(15,0)).pack(anchor='w')
         frame=ttk.Frame(self.root,padding=(15,6));frame.pack(fill='both',expand=True)
         columns=('time','speaker','text','state')
         self.tree=ttk.Treeview(frame,columns=columns,show='headings',selectmode='browse')

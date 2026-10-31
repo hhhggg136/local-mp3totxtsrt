@@ -18,7 +18,7 @@ import time
 import uuid
 from .core import Cancelled, UserError, Source, Project, SCALE, fingerprint, portable_path
 
-VERSION='0.7.0'
+VERSION='0.7.1'
 MODEL_HASHES={'ggml-small.bin':'1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
  'ggml-silero-v6.2.0.bin':'2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987',
  'campplus-zh-en.onnx':'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2'}
