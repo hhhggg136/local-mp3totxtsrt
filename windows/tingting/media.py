@@ -18,7 +18,7 @@ import time
 import uuid
 from .core import Cancelled, UserError, Source, Project, SCALE, fingerprint, portable_path
 
-VERSION='0.7.1'
+VERSION='0.8.0'
 MODEL_HASHES={'ggml-small.bin':'1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
  'ggml-silero-v6.2.0.bin':'2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987',
  'campplus-zh-en.onnx':'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2'}
@@ -41,12 +41,12 @@ class Runtime:
     def binary(self,name):
         suffix='.exe' if os.name=='nt' else ''
         folder='ffmpeg' if name in ['ffmpeg','ffprobe'] else ('speaker' if name=='speaker-embeddings' else 'asr')
-        file=self.root/'runtime'/folder/(name+suffix)
-        if not file.is_file():raise UserError(f'缺少本地组件 {name}，请重新安装完整版本。')
-        return file
+        return self.resolve('runtime/'+folder+'/'+name+suffix)
+    def resolve(self,relative):
+        from .components import Components
+        return Components(self).resolve(relative)
     def model(self,name):
-        file=self.root/'runtime/models'/name
-        if not file.is_file():raise UserError('安装包缺少本地模型，请重新安装完整版本。')
+        file=self.resolve('runtime/models/'+name)
         info=file.stat();identity=(info.st_size,info.st_mtime_ns)
         if self.checked.get(name)!=identity:
             if fingerprint(file,self.cancel)!=MODEL_HASHES[name]:raise UserError('本地模型校验失败，请重新安装。')

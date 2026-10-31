@@ -77,6 +77,8 @@ jobs:
           if (!$compiler) { throw 'Inno Setup compiler missing' }
           & $compiler.FullName /DAppArch=${{ matrix.arch }} /O"$pwd\dist\windows" windows/installer.iss
           if ($LASTEXITCODE) { throw 'Installer compilation failed' }
+          $installer = Get-ChildItem dist/windows/*Setup.exe | Select-Object -First 1
+          if ($installer.Length -ge 30000000) { throw 'Main installer must be smaller than 30 MB' }
       - name: Install and test actual packaged executable
         shell: pwsh
         run: |
@@ -84,6 +86,15 @@ jobs:
           $process = Start-Process $installer.FullName -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=desktopicon' -Wait -PassThru
           if ($process.ExitCode) { throw 'Installation failed' }
           $exe = "$env:LOCALAPPDATA\Programs\TingTingBeast\TingTingBeast.exe"
+          $env:TINGTING_COMPONENTS_DIR = "$pwd\.local\verified-components"
+          $status = "$pwd\.local\component-status.json"
+          $process = Start-Process $exe -ArgumentList "--component-status `"$status`"" -Wait -PassThru
+          if ($process.ExitCode -or !(Test-Path $status)) { throw 'Component status failed' }
+          $initial = Get-Content $status -Raw | ConvertFrom-Json
+          if ($initial.audio -or $initial.recognition -or $initial.speakers -or $initial.translation) { throw 'Fresh installation unexpectedly included optional components' }
+          $components = "$pwd\dist\windows\components\${{ matrix.arch }}"
+          $process = Start-Process $exe -ArgumentList "--configure-components `"$components`"" -Wait -PassThru
+          if ($process.ExitCode) { throw 'Offline component import failed' }
           $report = "$pwd\.local\win-${{ matrix.arch }}\installed-verification.json"
           $process = Start-Process $exe -ArgumentList "--self-test `"$report`"" -Wait -PassThru
           if ($process.ExitCode -or !(Test-Path $report)) { throw 'Installed executable verification failed' }

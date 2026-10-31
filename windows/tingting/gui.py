@@ -48,7 +48,7 @@ class Workspace:
 
     def build(self):
         first=ttk.Frame(self.root,padding=(12,8));first.pack(fill='x')
-        for title,fn in [('导入音视频',self.import_media),('打开项目',self.open_project),('保存项目',self.save),('导入 SRT',self.import_srt)]:self.button(first,title,fn)
+        for title,fn in [('导入音视频',self.import_media),('打开项目',self.open_project),('保存项目',self.save),('导入 SRT',self.import_srt),('本地组件',self.configure_components)]:self.button(first,title,fn)
         ttk.Label(first,textvariable=self.info).pack(side='left',padx=12)
         second=ttk.Frame(self.root,padding=(12,0));second.pack(fill='x')
         ttk.Label(second,text='识别语言').pack(side='left')
@@ -138,6 +138,7 @@ class Workspace:
         self.project=project;self.history=History(project);self.path=Path(path) if path else None;self.dirty=False
         self.player.seek(0);self.mode.set('原始时间线');self.info.set(project.source.file.name);self.refresh()
     def import_media(self):
+        if self.ensure_components(['audio'],self.import_media):return
         if not self.discard():return
         path=files.askopenfilename(title='选择本地音视频',parent=self.root)
         if not path:return
@@ -146,6 +147,7 @@ class Workspace:
         def done(result):self.wave=result[1];self.install(result[0]);self.status.set('素材已载入。选择语言后开始识别，或导入对应 SRT。')
         self.task('读取素材并准备磁盘试听缓存',work,done)
     def open_project(self):
+        if self.ensure_components(['audio'],self.open_project):return
         if not self.discard():return
         path=files.askopenfilename(title='打开剪辑项目',filetypes=[('听听兽项目','*.tingting')],parent=self.root)
         if not path:return
@@ -168,6 +170,7 @@ class Workspace:
         p=Project.make(self.project.source,read_srt(path));self.install(p);self.mark()
     def recognize(self):
         self.require()
+        if self.ensure_components(['audio','recognition'],self.recognize):return
         if self.project.cues and not boxes.askyesno('重新识别','重新识别会替换当前对白、片段和说话人归属。已保存的项目不受影响。继续？',parent=self.root):return
         folder=files.askdirectory(title='选择识别结果保存文件夹',parent=self.root)
         if not folder:return
@@ -245,6 +248,7 @@ class Workspace:
     def redo(self):self.require();self.player.stop();self.history.redo();self.mark()
     def analyze(self):
         self.require()
+        if self.ensure_components(['audio','speakers'],self.analyze):return
         count=dialogs.askinteger('区分说话人','预计人数：0 为自动，或输入 1–8。自动分组需要试听核对，重叠对白可能无法区分。',minvalue=0,maxvalue=8,initialvalue=0,parent=self.root)
         if count is None:return
         if (self.project.speakers is not None or self.history.undo_stack or self.history.redo_stack) and not boxes.askyesno('分析前确认','将生成新的说话人标记，并清空当前撤销/重做历史。当前文字和剪辑保留，已保存的项目不受影响。继续？',parent=self.root):return
@@ -283,6 +287,7 @@ class Workspace:
         self.task('导出中',lambda:self.media.export(snapshot,folder,mode,format,names,format!='srt'),lambda result:self.status.set('导出完成：'+str(result)))
     def translate(self):
         self.require()
+        if self.ensure_components(['translation'],self.translate):return
         from .translation import Translation, route
         window=tk.Toplevel(self.root);window.title('一键翻译');window.geometry('420x240');choice=[]
         languages={'中文':'zh','英语':'en','西班牙语':'es'}
@@ -318,6 +323,39 @@ class Workspace:
             for pair,_ in missing:translator.install(pair,imports.get(pair))
             return translator.translate(snapshot,folder,source,target,mode,bool(snapshot.speakers))
         self.task('本地翻译；首次可能需要下载语言包',work,lambda result:self.status.set('译文和双语字幕已生成：'+str(result)))
+    def ensure_components(self,names,continuation=None):
+        from .components import Components
+        manager=Components(self.runtime)
+        missing=[name for name in names if not manager.ready(name)]
+        if not missing:return False
+        summary='\n\n'.join(f'{manager.item(n)["title"]}：{manager.item(n)["bytes"]/1048576:.1f} MiB\n来源：{manager.item(n)["url"]}' for n in missing)
+        answer=boxes.askyesnocancel('配置本地组件',summary+'\n\n保存位置：'+str(manager.root)+'\n\n“是”下载；“否”导入对应版本的组件 ZIP；“取消”返回。下载后在本地运行，素材不会上传。失败或取消后可重试。',parent=self.root)
+        if answer is None:return True
+        archives={}
+        if not answer:
+            for name in missing:
+                path=files.askopenfilename(title='选择 '+manager.item(name)['title']+' 组件 ZIP',filetypes=[('组件包','*.zip')],parent=self.root)
+                if not path:return True
+                archives[name]=path
+        def work():
+            for name in missing:manager.install(name,archives.get(name))
+        def done(_):
+            self.status.set('本地组件已就绪；后续可离线使用。')
+            if continuation:continuation()
+        self.task('配置本地组件（可取消）',work,done)
+        return True
+
+    def configure_components(self):
+        from .components import Components
+        manager=Components(self.runtime)
+        if not manager.catalog:
+            boxes.showinfo('本地组件','当前安装包含离线组件。',parent=self.root);return
+        names={'1':'audio','2':'recognition','3':'speakers','4':'translation'}
+        summary='\n'.join(k+'：'+manager.item(n)['title']+'（'+('已就绪' if manager.ready(n) else '未配置')+'）' for k,n in names.items())
+        value=dialogs.askstring('本地组件',summary+'\n\n输入要配置的编号：',parent=self.root)
+        if value in names:
+            if not self.ensure_components([names[value]]):self.status.set('该组件已就绪，无需重复下载。')
+
     def learning(self):
         name=LearningStore.key(self.project_name.get());store=LearningStore(self.runtime.data/'learning.sqlite3')
         window=tk.Toplevel(self.root);window.title('本地纠错词库 · '+name);window.geometry('700x420')

@@ -26,7 +26,7 @@ jobs:
           assert data['conclusion']=='success' and data['head_branch']=='codex/windows-port'
           assert data['path']=='.github/workflows/windows.yml'
           changed=subprocess.check_output(['git','diff','--name-only',data['head_sha'],'HEAD'],text=True).splitlines()
-          assert set(changed)<={'.github/workflows/publish-windows.yml','docs/WINDOWS_RELEASE_0_7_0.md'},changed
+          assert set(changed)<={'.github/workflows/publish-windows.yml','docs/WINDOWS_RELEASE_0_8_0.md'},changed
           open('verified-sha.txt','w').write(data['head_sha'])
           PY
       - name: Download and verify installer bytes and reports
@@ -46,10 +46,20 @@ jobs:
               for name in ['native-verification.json','installed-verification.json']:
                   assert json.loads((Path('verification')/arch/name).read_text())['passed'] is True
               exe=next((Path('release')/arch).glob('*Setup.exe'))
+              assert exe.stat().st_size<30000000
               h=hashlib.sha256()
               with exe.open('rb') as f:
                   for chunk in iter(lambda:f.read(1048576),b''):h.update(chunk)
               assert h.hexdigest().lower() in (Path('release')/arch/('SHA256-'+arch+'.txt')).read_text(encoding='utf-8-sig').lower()
+              catalog_path=next((Path('release')/arch/'components'/arch).glob('*components.json'))
+              catalog=json.loads(catalog_path.read_text(encoding='utf-8'))
+              for item in catalog['components'].values():
+                  archive=catalog_path.parent/item['url'].rsplit('/',1)[-1]
+                  assert archive.stat().st_size==item['bytes']
+                  h=hashlib.sha256()
+                  with archive.open('rb') as f:
+                      for chunk in iter(lambda:f.read(1048576),b''):h.update(chunk)
+                  assert h.hexdigest()==item['sha256']
           assert json.loads(Path('verification/arm64/translation-verification.json').read_text())['passed'] is True
           translation_reports=list(Path('verification/translation').rglob('translation-verification.json'))
           assert translation_reports
@@ -61,8 +71,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(cat verified-sha.txt)
-          cp docs/WINDOWS_RELEASE_0_7_0.md release-notes.md
+          cp docs/WINDOWS_RELEASE_0_8_0.md release-notes.md
           printf '\n自动验证记录：https://github.com/%s/actions/runs/%s\n' "$GITHUB_REPOSITORY" "$(cat build-id.txt)" >> release-notes.md
-          gh release create windows-v0.7.0 --repo "$GITHUB_REPOSITORY" --target "$sha" --draft --prerelease --title '听听兽 0.7.0 · Windows 预览版' --notes-file release-notes.md
-          gh release upload windows-v0.7.0 --repo "$GITHUB_REPOSITORY" release/x64/* release/arm64/* Windows-verification.zip
-          gh release edit windows-v0.7.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          gh release create windows-v0.8.0 --repo "$GITHUB_REPOSITORY" --target "$sha" --draft --prerelease --title '听听兽 0.8.0 · Windows 轻量版' --notes-file release-notes.md
+          gh release upload windows-v0.8.0 --repo "$GITHUB_REPOSITORY" release/x64/*Setup.exe release/x64/SHA256-x64.txt release/arm64/*Setup.exe release/arm64/SHA256-arm64.txt release/x64/components/x64/* release/arm64/components/arm64/* Windows-verification.zip
+          gh release edit windows-v0.8.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false

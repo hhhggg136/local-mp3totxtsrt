@@ -97,8 +97,7 @@ class Translation:
             with tempfile.TemporaryDirectory(prefix='translate-',dir=self.runtime.cache) as temp:
                 temp=Path(temp);request=temp/'input.json';output=temp/'output.json'
                 request.write_text(json.dumps({'package':str(package),'texts':texts},ensure_ascii=False),encoding='utf-8')
-                worker=self.runtime.root/'translation/tingting-translate.exe'
-                if not worker.is_file():raise UserError('缺少本地翻译组件，请重新安装完整版本。')
+                worker=self.runtime.resolve('translation/tingting-translate.exe')
                 env={'CT2_FORCE_CPU_ISA':'GENERIC'} if platform.machine().lower() in ['arm64','aarch64'] else {}
                 log=temp/'worker.log'
                 with log.open('wb') as handle:

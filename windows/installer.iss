@@ -2,7 +2,7 @@
 #ifndef AppArch
  #define AppArch "x64"
 #endif
-#define AppVersion "0.7.1"
+#define AppVersion "0.8.0"
 [Setup]
 SourceDir=..
 AppId={{D0D58A6A-F2F5-4608-933F-9CD44CA756DB}
